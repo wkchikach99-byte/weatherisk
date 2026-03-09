@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=fig9_cmip6
-#SBATCH --partition=batch
+#SBATCH --partition=smp
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
@@ -10,6 +10,8 @@
 #SBATCH --error=logs/fig9_%j.err
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=wikchi001@awi.de
+#SBATCH --account=paleodyn.paleodyn
+#SBATCH --qos=12h
 
 # ============================================================
 #  SLURM job: Reproduce Figure 9 from Contzen et al. (2025)
@@ -44,8 +46,8 @@ mkdir -p logs
 
 # Load Python
 module purge 2>/dev/null || true
-module load python/3.11 2>/dev/null || module load python/3.10 2>/dev/null || \
-    module load anaconda3 2>/dev/null || true
+module load python/3.11.7 2>/dev/null || module load python/3.11 2>/dev/null || \
+    module load python/3.10.4 2>/dev/null || true
 
 # Activate venv
 if [ -f "${WORK_DIR}/.venv/bin/activate" ]; then
@@ -63,6 +65,7 @@ export OPENBLAS_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 
 # ── Run pipeline ──────────────────────────────────────────────
 python3 scripts/reproduce_fig9.py \
+    --data-dir /albedo/pool/CMIP6/data/CMIP/AWI/AWI-ESM-1-1-LR/historical/r1i1p1f1/Amon/pr/gn/v20200212 \
     --workers ${SLURM_CPUS_PER_TASK} \
     --output-dir output/cmip6_fig9 \
     --dpi 300
