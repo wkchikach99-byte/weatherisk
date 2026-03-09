@@ -35,10 +35,18 @@ DEFAULT_DATA_DIR = os.path.join(
 
 # Common locations on AWI Albedo / DKRZ where CMIP6 data is pre-staged
 HPC_SEARCH_PATHS = [
+    # Albedo paths (under /albedo/ mount)
+    "/albedo/pool/CMIP6/data/CMIP/AWI/AWI-ESM-1-1-LR/historical/r1i1p1f1/Amon/pr/gn/v20200212",
+    "/albedo/pool/CMIP6/data/CMIP/AWI/AWI-ESM-1-1-LR/historical",
+    "/albedo/pool/CMIP6/data/CMIP/AWI",
+    "/albedo/pool/CMIP6",
+    # Bare paths (some systems mount without /albedo prefix)
+    "/pool/data/CMIP6/CMIP/AWI/AWI-ESM-1-1-LR/historical/r1i1p1f1/Amon/pr/gn/v20200212",
     "/pool/data/CMIP6/CMIP/AWI/AWI-ESM-1-1-LR/historical",
-    "/work/bk1099",
-    "/work/ik1017",
     "/pool/data/CMIP6",
+    # User work/scratch
+    "/albedo/work/user/{user}/cmip6",
+    "/work/{user}/cmip6",
     "/scratch/{user}/cmip6",
 ]
 
@@ -51,7 +59,9 @@ ESGF_BASE_URL = (
 # Expected file pattern
 FILE_PATTERN = "pr_Amon_AWI-ESM-1-1-LR_historical_r1i1p1f1_gn_"
 
-# Expected year chunks (CMIP6 standard splitting)
+# Expected year chunks — files can be either annual (Albedo: 185001-185012)
+# or decadal (ESGF: 185001-185912).  The glob-based discovery handles both.
+# This list is only used for ESGF download fallback (decadal).
 EXPECTED_CHUNKS = [
     "185001-185912",
     "186001-186912",
