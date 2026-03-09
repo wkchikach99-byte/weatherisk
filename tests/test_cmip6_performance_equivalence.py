@@ -4,6 +4,7 @@ from scipy.stats import t as t_dist
 
 from weatherisk.cmip6_pipeline import (
     CMIP6Config,
+    _edc_condensed_flat,
     _compute_frechet_global,
     _edc_matrix_flat,
     _grid_coords,
@@ -102,6 +103,16 @@ def test_edc_matrix_fast_matches_reference_loop():
     fast = _edc_matrix_flat(frechet)
     ref = _reference_edc_matrix_flat(frechet)
     np.testing.assert_allclose(fast, ref, rtol=0, atol=1e-12)
+
+
+def test_edc_condensed_matches_squareform_of_full_matrix():
+    from scipy.spatial.distance import squareform
+
+    rng = np.random.default_rng(654)
+    frechet = rng.lognormal(mean=0.1, sigma=0.4, size=(18, 10))
+    full = _edc_matrix_flat(frechet)
+    condensed = _edc_condensed_flat(frechet)
+    np.testing.assert_allclose(condensed, squareform(full), rtol=0, atol=1e-12)
 
 
 def test_incluster_reestimate_parallel_matches_serial():

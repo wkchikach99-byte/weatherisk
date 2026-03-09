@@ -115,6 +115,18 @@ Note: only comparison runs that support an actual optimization decision are kept
 - The numerical checks remained stable (`k_LEC = 13`, `k_EDC = 17`, same estimate means at benchmark precision).
 - Runtime stayed within the same band as the pre-refactor optimized pipeline, which is expected because this change targets peak memory and duplicate allocations rather than raw arithmetic cost.
 
+### Vectorized Pair Assembly
+
+- Representative `36-year, 12x12, 4-worker` benchmark after vectorizing pair-array setup: `5.309s` total, peak RSS `0.583 GiB`.
+- The benchmark stayed numerically stable at the same check values.
+- The runtime gain on this benchmark size was modest, which suggests Python pair-list construction was not yet the dominant cost relative to optimizer evaluations.
+
+### Condensed EDC Path
+
+- Representative `36-year, 12x12, 4-worker` benchmark after switching the no-artifact EDC path to condensed storage: `5.316s` total, peak RSS `0.579 GiB`.
+- The clustering step itself became slightly cheaper while the end-to-end runtime remained essentially flat.
+- This is consistent with a memory-saving refactor applied to a step that is not the main wall-clock bottleneck on the benchmark grid.
+
 ## Run 2026-03-09T19:42:19.806555+00:00
 
 - Git revision: `b575df2`
@@ -133,5 +145,45 @@ Note: only comparison runs that support an actual optimization decision are kept
 | _smooth_estimates_cmip6 | 0.001 |
 | _run_clustering_cmip6 | 0.050 |
 | _incluster_reestimate_cmip6 | 2.824 |
+
+- Checks: `{'frechet_min': 0.15341623656416714, 'frechet_max': 395.99565803595567, 'labels_edc_sum': 1304, 'est_mean_a': 0.0172096948404699, 'est_mean_b': 1.2176352663612096, 'est_mean_gamma': -0.15018490051108158}`
+## Run 2026-03-09T19:44:11.245125+00:00
+
+- Git revision: `23acf77`
+- Entrypoint: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
+- Total time: `5.309s`
+- Config: `{'seed': 12345, 'n_years': 36, 'n_lat': 12, 'n_lon': 12, 'n_workers': 4, 'df': 5.0, 'alpha': 1.0, 'neighbor_radius': 3.0, 'smoothing_radius': 2.0, 'mle_ensemble': 3, 'stl_period': 12}`
+- Derived: `{'n_months': 432, 'n_cells': 144, 'n_valid_cells': 144, 'n_years_complete': 36, 'k_lec': 13, 'k_edc': 17}`
+- Max memory: `0.583 GiB` (`625721344` bytes; peak_process_tree_rss, Δt=0.05s)
+
+| Step | Seconds |
+| --- | ---: |
+| _detrend_grid_fast | 0.001 |
+| _monthly_annual_maxima | 0.140 |
+| _compute_frechet_global | 0.845 |
+| _run_local_estimation_cmip6 | 1.419 |
+| _smooth_estimates_cmip6 | 0.002 |
+| _run_clustering_cmip6 | 0.060 |
+| _incluster_reestimate_cmip6 | 2.813 |
+
+- Checks: `{'frechet_min': 0.15341623656416714, 'frechet_max': 395.99565803595567, 'labels_edc_sum': 1304, 'est_mean_a': 0.0172096948404699, 'est_mean_b': 1.2176352663612096, 'est_mean_gamma': -0.15018490051108158}`
+## Run 2026-03-09T19:45:21.083073+00:00
+
+- Git revision: `23acf77`
+- Entrypoint: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
+- Total time: `5.316s`
+- Config: `{'seed': 12345, 'n_years': 36, 'n_lat': 12, 'n_lon': 12, 'n_workers': 4, 'df': 5.0, 'alpha': 1.0, 'neighbor_radius': 3.0, 'smoothing_radius': 2.0, 'mle_ensemble': 3, 'stl_period': 12}`
+- Derived: `{'n_months': 432, 'n_cells': 144, 'n_valid_cells': 144, 'n_years_complete': 36, 'k_lec': 13, 'k_edc': 17}`
+- Max memory: `0.579 GiB` (`622067712` bytes; peak_process_tree_rss, Δt=0.05s)
+
+| Step | Seconds |
+| --- | ---: |
+| _detrend_grid_fast | 0.001 |
+| _monthly_annual_maxima | 0.141 |
+| _compute_frechet_global | 0.872 |
+| _run_local_estimation_cmip6 | 1.353 |
+| _smooth_estimates_cmip6 | 0.001 |
+| _run_clustering_cmip6 | 0.047 |
+| _incluster_reestimate_cmip6 | 2.868 |
 
 - Checks: `{'frechet_min': 0.15341623656416714, 'frechet_max': 395.99565803595567, 'labels_edc_sum': 1304, 'est_mean_a': 0.0172096948404699, 'est_mean_b': 1.2176352663612096, 'est_mean_gamma': -0.15018490051108158}`

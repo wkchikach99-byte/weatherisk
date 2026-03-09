@@ -41,8 +41,7 @@ from typing import Any
 import numpy as np
 from scipy.cluster.hierarchy import fcluster
 from scipy.optimize import minimize
-from scipy.spatial.distance import squareform
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, pdist, squareform
 from scipy.stats import qmc, rankdata
 
 from weatherisk.extremes import fit_gev, to_frechet
@@ -643,18 +642,10 @@ def _local_mle_one_cmip6(
         return np.array([1.0, 0.0, 0.0])
 
     z_c = frechet[:, cidx]
-    zi_l, zj_l, xl_l, yl_l = [], [], [], []
-    for j in nb:
-        z_nb = frechet[:, j]
-        zi_l.extend(z_nb)
-        zj_l.extend(z_c)
-        xl_l.extend([dj[j]] * n_years)  # x = column direction
-        yl_l.extend([di[j]] * n_years)  # y = row direction
-
-    zi = np.asarray(zi_l)
-    zj = np.asarray(zj_l)
-    xl = np.asarray(xl_l)
-    yl = np.asarray(yl_l)
+    zi = frechet[:, nb].T.reshape(-1)
+    zj = np.tile(z_c, len(nb))
+    xl = np.repeat(dj[nb], n_years)  # x = column direction
+    yl = np.repeat(di[nb], n_years)  # y = row direction
 
     good = (zi > 0) & (zj > 0) & np.isfinite(zi) & np.isfinite(zj)
     zi, zj, xl, yl = zi[good], zj[good], xl[good], yl[good]
@@ -817,6 +808,25 @@ def _edc_matrix_flat(frechet: np.ndarray) -> np.ndarray:
     return ec
 
 
+def _edc_condensed_flat(frechet: np.ndarray) -> np.ndarray:
+    """Condensed rank-based madogram extremal-coefficient distances.
+
+    This is numerically equivalent to :func:`_edc_matrix_flat`, but returns the
+    upper triangle directly so callers can avoid materializing the full square
+    matrix when they only need thresholding and linkage.
+    """
+    n_years, n_cells = frechet.shape
+    ranks = np.empty((n_cells, n_years))
+    for s in range(n_cells):
+        ranks[s] = rankdata(frechet[:, s])
+
+    diff_sum = pdist(ranks, metric="cityblock")
+    v = diff_sum / (n_years * 2.0 * (n_years + 1))
+    denom = 1.0 - 2.0 * v
+    denom[denom <= 0] = 1e-12
+    return np.minimum(1.0, (1.0 + 2.0 * v) / denom - 1.0)
+
+
 def _run_clustering_cmip6(
     smoothed: np.ndarray,
     frechet: np.ndarray,
@@ -861,18 +871,21 @@ def _run_clustering_cmip6(
     if verbose:
         print("  Computing EDC dissimilarity (madogram D₁) …")
     t0 = time.time()
-    dm_edc = _edc_matrix_flat(frechet)
-    edc_condensed = squareform(dm_edc, checks=False)
+    if cfg.retain_clustering_artifacts:
+        dm_edc = _edc_matrix_flat(frechet)
+        edc_condensed = squareform(dm_edc, checks=False)
+        dm_edc_out = dm_edc
+    else:
+        edc_condensed = _edc_condensed_flat(frechet)
+        dm_edc_out = None
     thr_edc = float(np.quantile(edc_condensed, cfg.quantile_threshold))
     hc_edc = clustering(edc_condensed)
     k_edc = cluster_number_threshold_method(hc_edc, thr_edc)
     k_edc = max(2, k_edc)
     labels_edc = fcluster(hc_edc, t=k_edc, criterion="maxclust")
-    dm_edc_out = dm_edc if cfg.retain_clustering_artifacts else None
     hc_edc_out = hc_edc if cfg.retain_clustering_artifacts else None
     del edc_condensed
     if not cfg.retain_clustering_artifacts:
-        del dm_edc
         del hc_edc
         gc.collect()
     if verbose:

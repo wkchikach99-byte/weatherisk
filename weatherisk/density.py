@@ -161,17 +161,8 @@ def pairwise_density_optim(
 
     Xlist = np.repeat(X[ilist] - X[jlist], n_sim)
     Ylist = np.repeat(Y[ilist] - Y[jlist], n_sim)
-    zilist = np.tile(z[ilist], (1, 1)).ravel()
-    zjlist = np.tile(z[jlist], (1, 1)).ravel()
-
-    # Expand to per-simulation pairs
-    zilist_full = []
-    zjlist_full = []
-    for k in range(len(ilist)):
-        zilist_full.extend(z[ilist[k], :])
-        zjlist_full.extend(z[jlist[k], :])
-    zilist = np.array(zilist_full)
-    zjlist = np.array(zjlist_full)
+    zilist = z[ilist].reshape(-1)
+    zjlist = z[jlist].reshape(-1)
 
     if max_dist > 0:
         sel = Xlist ** 2 + Ylist ** 2 <= max_dist ** 2
@@ -296,23 +287,14 @@ def pairwise_density_optim_local(
     ci, cj = grid.number_grid(xy_pos)
     z_centre = sim_data[ci, cj, :]
 
-    zilist = []
-    zjlist = []
-    Xlist = []
-    Ylist = []
+    sel_indices = np.asarray(sel_indices, dtype=int)
+    sel_rows = np.array([grid.number_grid(idx) for idx in sel_indices], dtype=int)
+    z_neighbours = sim_data[sel_rows[:, 0], sel_rows[:, 1], :]
 
-    for idx in sel_indices:
-        ni, nj = grid.number_grid(idx)
-        z_nb = sim_data[ni, nj, :]
-        zilist.extend(z_nb)
-        zjlist.extend(z_centre)
-        Xlist.extend([X_flat[idx] - X_flat[xy_pos]] * n_sim)
-        Ylist.extend([Y_flat[idx] - Y_flat[xy_pos]] * n_sim)
-
-    zilist = np.array(zilist)
-    zjlist = np.array(zjlist)
-    Xlist = np.array(Xlist)
-    Ylist = np.array(Ylist)
+    zilist = z_neighbours.reshape(-1)
+    zjlist = np.tile(z_centre, len(sel_indices))
+    Xlist = np.repeat(X_flat[sel_indices] - X_flat[xy_pos], n_sim)
+    Ylist = np.repeat(Y_flat[sel_indices] - Y_flat[xy_pos], n_sim)
 
     lo = np.array([lower_bounds[0], lower_bounds[1], -np.pi / 2])
     hi = np.array([upper_bounds[0], upper_bounds[1], np.pi / 2])
