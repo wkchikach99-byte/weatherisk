@@ -9,6 +9,15 @@ actual optimization sequence on the full pipeline path.
 
 Note: only comparison runs that support an actual optimization decision are kept below.
 
+## Decision Benchmark Protocol
+
+- Default benchmark class from now on: `decision benchmark`
+- Medium case: `48 years`, `16x16` grid, `4 workers`
+- Sampling plan: `1 warmup + 5 measured runs`
+- Warmup policy: warmup runs are discarded from the reported summary
+- Reported statistics: total-time `mean/min/max/std`, per-step `mean/min/max/std`, and peak RSS `mean/max`
+- Stability rule: benchmark summaries should also record whether the numerical check dictionary stayed identical across measured runs
+
 ## Run 2026-03-09T15:36:19.463268+00:00
 
 - Git revision: `0bc6035`
@@ -187,3 +196,26 @@ Note: only comparison runs that support an actual optimization decision are kept
 | _incluster_reestimate_cmip6 | 2.868 |
 
 - Checks: `{'frechet_min': 0.15341623656416714, 'frechet_max': 395.99565803595567, 'labels_edc_sum': 1304, 'est_mean_a': 0.0172096948404699, 'est_mean_b': 1.2176352663612096, 'est_mean_gamma': -0.15018490051108158}`
+## Decision Benchmark 2026-03-09T19:54:49.439181+00:00
+
+- Git revision: `23b6ceb`
+- Entrypoint: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
+- Method: `1 warmup + 5 measured runs` (warmups excluded from summary)
+- Benchmark case: `medium`
+- Config: `{'seed': 12345, 'n_years': 48, 'n_lat': 16, 'n_lon': 16, 'n_workers': 4, 'df': 5.0, 'alpha': 1.0, 'neighbor_radius': 3.0, 'smoothing_radius': 2.0, 'mle_ensemble': 3, 'stl_period': 12}`
+- Derived: `{'n_months': 576, 'n_cells': 256, 'n_valid_cells': 256, 'n_years_complete': 48, 'k_lec': 38, 'k_edc': 20}`
+- Total time summary: mean `9.176s`, min `9.116s`, max `9.227s`, std `0.038s`
+- Peak memory summary: mean `0.757 GiB`, max `0.772 GiB` (`peak_process_tree_rss`, Δt=0.05s)
+- Checks stable across measured runs: `True`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _detrend_grid_fast | 0.002 | 0.001 | 0.002 | 0.000 |
+| _monthly_annual_maxima | 0.001 | 0.000 | 0.001 | 0.000 |
+| _compute_frechet_global | 1.022 | 0.999 | 1.066 | 0.024 |
+| _run_local_estimation_cmip6 | 2.304 | 2.286 | 2.338 | 0.018 |
+| _smooth_estimates_cmip6 | 0.003 | 0.002 | 0.003 | 0.000 |
+| _run_clustering_cmip6 | 0.076 | 0.073 | 0.080 | 0.003 |
+| _incluster_reestimate_cmip6 | 5.721 | 5.681 | 5.767 | 0.035 |
+
+- Reference checks: `{'frechet_min': 0.14875993551681177, 'frechet_max': 771.6627392983846, 'labels_edc_sum': 2485, 'est_mean_a': 0.01500266795292907, 'est_mean_b': 0.8624371652491263, 'est_mean_gamma': 0.02906508271908983}`

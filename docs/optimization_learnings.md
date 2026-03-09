@@ -1,5 +1,15 @@
 # Optimization Learnings
 
+## 2026-03-09 — Benchmark Methodology Update
+
+- Decision benchmarks now use a medium synthetic CMIP6 case by default: `48 years`, `16x16`, `4 workers`.
+- Each benchmark summary now uses `1 warmup + 5 measured runs`.
+- Warmups are excluded from reported statistics.
+- Recorded metrics should include total-time `mean/min/max/std`, per-step `mean/min/max/std`, and peak RSS `mean/max`.
+- Single-run measurements remain useful for debugging, but they are no longer treated as decision-grade evidence because noise can hide small but real effects.
+- First recorded decision benchmark on this protocol: total time mean `9.176s` with std `0.038s`; peak RSS mean `0.757 GiB`, max `0.772 GiB`.
+- The measured runs were numerically stable across all recorded checks, which makes this medium case suitable as the current regression/performance comparison baseline.
+
 ## 2026-03-09 — Fix 1: Clustering memory retention
 
 - Change: CMIP6 clustering now reuses the condensed distance vector for thresholding and linkage, lowers the default LEC chunk size, and drops `dm_*` / `hc_*` artifacts by default unless explicitly requested.
