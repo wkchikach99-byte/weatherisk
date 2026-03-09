@@ -39,7 +39,7 @@ echo "  CPUs: ${SLURM_CPUS_PER_TASK}"
 echo "============================================"
 
 # ── Setup ──────────────────────────────────────────────────────
-WORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+WORK_DIR="/albedo/work/user/wikchi001/weatherisk"
 cd "${WORK_DIR}"
 
 mkdir -p logs
@@ -58,10 +58,13 @@ echo "  Python: $(python3 --version) ($(which python3))"
 echo "  Working dir: ${WORK_DIR}"
 echo ""
 
-# Set threading
-export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
-export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK}
-export OPENBLAS_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+# Set threading — each MLE worker gets 1 thread to avoid oversubscription
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+
+# Force unbuffered output so progress lines appear in real time
+export PYTHONUNBUFFERED=1
 
 # ── Run pipeline ──────────────────────────────────────────────
 python3 scripts/reproduce_fig9.py \

@@ -7,18 +7,40 @@ optimisation of ellipse parameters (a, b, gamma).
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 import numpy as np
-from scipy.stats import t as t_dist, norm
+from scipy.special import gammaln, stdtr
+from scipy.stats import norm
 
 from weatherisk.covariance import cov_fkt_2d
 
 
+@lru_cache(maxsize=None)
+def _t_pdf_log_coeff(df: float) -> float:
+    """Return the log normalising constant of the Student-t PDF."""
+    return (
+        gammaln((df + 1.0) / 2.0)
+        - gammaln(df / 2.0)
+        - 0.5 * np.log(df * np.pi)
+    )
+
+
+def _t_pdf(x: float | np.ndarray, df: float) -> float | np.ndarray:
+    """Student-t PDF evaluated without scipy.stats wrapper overhead."""
+    coeff = np.exp(_t_pdf_log_coeff(df))
+    return coeff * np.power(1.0 + (x * x) / df, -(df + 1.0) / 2.0)
+
+
+def _t_cdf(x: float | np.ndarray, df: float) -> float | np.ndarray:
+    """Student-t CDF using scipy.special's direct implementation."""
+    return stdtr(df, x)
+
+
 def _dtdiff(x: float | np.ndarray, df: float) -> float | np.ndarray:
     """Derivative of the t-distribution PDF (used inside pairwise density)."""
-    from scipy.special import gamma as gamma_fn
-
-    coeff = gamma_fn((df + 1) / 2) / gamma_fn(df / 2) / np.sqrt(df * np.pi)
-    return coeff * (-(df + 1) / 2) * (1 + x * x / df) ** (-(df + 1) / 2 - 1) * 2 * x / df
+    pdf = _t_pdf(x, df)
+    return -((df + 1.0) * x / (df + x * x)) * pdf
 
 
 def pairwise_density_summand(
@@ -58,10 +80,10 @@ def pairwise_density_summand(
     m1 = ((z2 / z1) ** (1.0 / df) - cv) / c
     m2 = ((z1 / z2) ** (1.0 / df) - cv) / c
 
-    dt_m1 = t_dist.pdf(m1, df + 1)
-    dt_m2 = t_dist.pdf(m2, df + 1)
-    pt_m1 = t_dist.cdf(m1, df + 1)
-    pt_m2 = t_dist.cdf(m2, df + 1)
+    dt_m1 = _t_pdf(m1, df + 1)
+    dt_m2 = _t_pdf(m2, df + 1)
+    pt_m1 = _t_cdf(m1, df + 1)
+    pt_m2 = _t_cdf(m2, df + 1)
 
     # First factor of the product
     term1_a = -pt_m1 / (z1 * z1)
