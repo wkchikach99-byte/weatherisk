@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=64G
+#SBATCH --mem=220G
 #SBATCH --time=12:00:00
 #SBATCH --output=logs/fig9_%j.out
 #SBATCH --error=logs/fig9_%j.err
@@ -21,10 +21,19 @@
 #
 #  Submit:
 #    sbatch hpc/run_fig9.slurm
+#    sbatch --mem=240G hpc/run_fig9.slurm
+#    sbatch --partition=fat --mem=1500G hpc/run_fig9.slurm
 #
 #  Monitor:
 #    squeue -u wikchi001
 #    tail -f logs/fig9_*.out
+#
+#  Memory notes:
+#    - Default is now one `smp` node with 16 CPUs and 220 GiB RAM.
+#    - This keeps the same node count as before but uses most of a 256 GiB
+#      production node.
+#    - If the run still exceeds memory, submit on `fat` instead of editing
+#      the script: `sbatch --partition=fat --mem=1500G hpc/run_fig9.slurm`
 #
 #  NOTE: Edit --account if required by your allocation.
 #        Check with: sacctmgr show assoc user=wikchi001
@@ -36,6 +45,8 @@ echo "  Job started: $(date)"
 echo "  Node: $(hostname)"
 echo "  Job ID: ${SLURM_JOB_ID}"
 echo "  CPUs: ${SLURM_CPUS_PER_TASK}"
+echo "  Memory request: ${SLURM_MEM_PER_NODE:-unknown} MB per node"
+echo "  Partition: ${SLURM_JOB_PARTITION}"
 echo "============================================"
 
 # ── Setup ──────────────────────────────────────────────────────
