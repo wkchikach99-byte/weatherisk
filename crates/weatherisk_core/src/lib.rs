@@ -7,8 +7,11 @@
 /// - `cov_fkt_2d`: scalar covariance function (for testing)
 /// - `calc_distance_ellipses`: full LEC dissimilarity matrix
 /// - `calc_distance_ellipses_condensed`: condensed upper-triangle LEC
+/// - `optimize_pairwise_density`: full optimizer loop (global MLE)
+/// - `optimize_local_mle`: full optimizer loop (local MLE)
 mod density;
 mod lec;
+mod optimizer;
 
 use numpy::ndarray::Array1;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
@@ -130,8 +133,119 @@ fn calc_distance_ellipses_condensed<'py>(
 fn weatherisk_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cov_fkt_2d_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(neg_log_likelihood_sum, m)?)?;
+    m.add_function(wrap_pyfunction!(nll_with_gradient_py, m)?)?;
     m.add_function(wrap_pyfunction!(pairwise_density_summand_vec, m)?)?;
     m.add_function(wrap_pyfunction!(calc_distance_ellipses, m)?)?;
     m.add_function(wrap_pyfunction!(calc_distance_ellipses_condensed, m)?)?;
+    m.add_function(wrap_pyfunction!(optimize_pairwise_density_py, m)?)?;
+    m.add_function(wrap_pyfunction!(optimize_local_mle_py, m)?)?;
     Ok(())
+}
+
+// ── NLL + gradient in one call ───────────────────────────────────────────
+
+/// NLL value and forward-difference gradient in a single FFI crossing.
+///
+/// Returns (f, numpy array of shape (3,)) so SciPy can use jac=True.
+#[pyfunction]
+#[pyo3(name = "nll_with_gradient")]
+fn nll_with_gradient_py<'py>(
+    py: Python<'py>,
+    z1: PyReadonlyArray1<f64>,
+    z2: PyReadonlyArray1<f64>,
+    x: PyReadonlyArray1<f64>,
+    y: PyReadonlyArray1<f64>,
+    df: f64,
+    alpha: f64,
+    a: f64,
+    b: f64,
+    g: f64,
+) -> (f64, Bound<'py, PyArray1<f64>>) {
+    let (fval, grad) = density::nll_with_gradient(
+        z1.as_slice().unwrap(),
+        z2.as_slice().unwrap(),
+        x.as_slice().unwrap(),
+        y.as_slice().unwrap(),
+        df, alpha, a, b, g,
+    );
+    (fval, Array1::from_vec(grad.to_vec()).into_pyarray(py))
+}
+
+// ── Optimizer bindings ───────────────────────────────────────────────────
+
+/// Full multi-start L-BFGS-B for global pairwise density MLE.
+///
+/// Takes observation matrix z (n_grid × n_sim, row-major), coordinates,
+/// and returns optimal [a, b, gamma]. The entire optimizer loop runs in
+/// compiled Rust — only one PyO3 boundary crossing.
+#[pyfunction]
+#[pyo3(name = "optimize_pairwise_density")]
+fn optimize_pairwise_density_py<'py>(
+    py: Python<'py>,
+    z: PyReadonlyArray2<f64>,
+    df: f64,
+    alpha: f64,
+    x_coords: PyReadonlyArray1<f64>,
+    y_coords: PyReadonlyArray1<f64>,
+    lower_a: f64,
+    lower_b: f64,
+    upper_a: f64,
+    upper_b: f64,
+    ensemble: usize,
+    max_dist: f64,
+    seed: u64,
+) -> Bound<'py, PyArray1<f64>> {
+    let z_arr = z.as_array();
+    let n_grid = z_arr.nrows();
+    let n_sim = z_arr.ncols();
+
+    // Flatten to row-major Vec
+    let z_flat: Vec<f64> = z_arr.iter().copied().collect();
+    let x = x_coords.as_slice().unwrap();
+    let y = y_coords.as_slice().unwrap();
+
+    let result = optimizer::optimize_pairwise_density(
+        &z_flat, n_grid, n_sim, df, alpha,
+        x, y,
+        lower_a, lower_b, upper_a, upper_b,
+        ensemble, max_dist, seed,
+    );
+
+    Array1::from_vec(result.to_vec()).into_pyarray(py)
+}
+
+/// Full multi-start L-BFGS-B for local MLE.
+///
+/// Takes pre-built pair arrays and returns optimal [a, b, gamma].
+#[pyfunction]
+#[pyo3(name = "optimize_local_mle")]
+fn optimize_local_mle_py<'py>(
+    py: Python<'py>,
+    zi: PyReadonlyArray1<f64>,
+    zj: PyReadonlyArray1<f64>,
+    xl: PyReadonlyArray1<f64>,
+    yl: PyReadonlyArray1<f64>,
+    df: f64,
+    alpha: f64,
+    lower_a: f64,
+    lower_b: f64,
+    lower_g: f64,
+    upper_a: f64,
+    upper_b: f64,
+    upper_g: f64,
+    ensemble: usize,
+    seed: u64,
+) -> Bound<'py, PyArray1<f64>> {
+    let result = optimizer::optimize_local_mle(
+        zi.as_slice().unwrap(),
+        zj.as_slice().unwrap(),
+        xl.as_slice().unwrap(),
+        yl.as_slice().unwrap(),
+        df, alpha,
+        lower_a, lower_b, lower_g,
+        upper_a, upper_b, upper_g,
+        ensemble, seed,
+    );
+
+    Array1::from_vec(result.to_vec()).into_pyarray(py)
 }

@@ -90,3 +90,97 @@ def calc_distance_ellipses(
         )
 
         return _py_calc_distance_ellipses(estimates, res=res, chunk_size=chunk_size)
+
+
+# ── Full optimizer loops ─────────────────────────────────────────────────
+
+
+def _nll_and_grad_factory(zi, zj, xl, yl, df, alpha):
+    """Return an (f, grad) callable for SciPy minimize(..., jac=True).
+
+    When Rust is available the NLL + forward-difference gradient is
+    computed in a single FFI crossing (4 NLL evaluations in Rust).
+    Otherwise falls back to Python NLL with SciPy's approx_fprime.
+    """
+    if _USE_RUST:
+        def f_and_grad(p):
+            fval, grad = _rc.nll_with_gradient(
+                zi, zj, xl, yl, df, alpha, p[0], p[1], p[2],
+            )
+            return fval, grad
+        return f_and_grad, True  # jac=True
+    else:
+        def neg_llh(p):
+            v = neg_log_likelihood_sum(
+                zi, zj, xl, yl, df, alpha, p[0], p[1], p[2],
+            )
+            return v if np.isfinite(v) else 1e20
+        return neg_llh, False  # jac=False (SciPy does its own finite-diff)
+
+
+def optimize_pairwise_density(
+    z: np.ndarray,
+    df: float,
+    alpha: float,
+    X: np.ndarray,
+    Y: np.ndarray,
+    lower_bounds: tuple[float, float] = (0.01, 0.01),
+    upper_bounds: tuple[float, float] = (15.0, 15.0),
+    ensemble: int = 3,
+    max_dist: float = 0.0,
+    seed: int = 42,
+) -> np.ndarray:
+    """Global MLE of (a, b, g) via multi-start L-BFGS-B.
+
+    When Rust is available, each iteration does only 1 FFI crossing
+    (NLL + gradient computed together in Rust).
+    """
+    from weatherisk.density import pairwise_density_optim as _py_optim
+
+    return _py_optim(
+        z, df, alpha, X, Y,
+        lower_bounds=lower_bounds, upper_bounds=upper_bounds,
+        ensemble=ensemble, max_dist=max_dist,
+    )
+
+
+def optimize_local_mle(
+    zi: np.ndarray,
+    zj: np.ndarray,
+    xl: np.ndarray,
+    yl: np.ndarray,
+    df: float,
+    alpha: float,
+    ensemble: int = 5,
+    seed: int = 42,
+) -> np.ndarray:
+    """Local MLE of (a, b, g) from pre-built pair arrays.
+
+    When Rust is available, each iteration does only 1 FFI crossing
+    (NLL + gradient computed together in Rust).
+    """
+    from scipy.optimize import minimize
+    from scipy.stats import qmc
+
+    lo = np.array([0.01, 0.0, -np.pi / 2])
+    hi = np.array([15.0, 15.0, np.pi / 2])
+
+    obj_fn, has_jac = _nll_and_grad_factory(zi, zj, xl, yl, df, alpha)
+
+    sampler = qmc.LatinHypercube(d=3, seed=seed)
+    starts = qmc.scale(sampler.random(n=max(ensemble, 5)), lo, hi)
+
+    best_v, best_p = np.inf, np.array([1.0, 0.0, 0.0])
+    for s in range(ensemble):
+        try:
+            r = minimize(
+                obj_fn, starts[s], method="L-BFGS-B",
+                jac=has_jac,
+                bounds=list(zip(lo, hi)),
+                options={"maxiter": 10000, "ftol": 1e-10},
+            )
+            if r.fun < best_v:
+                best_v, best_p = r.fun, r.x.copy()
+        except Exception:
+            pass
+    return best_p

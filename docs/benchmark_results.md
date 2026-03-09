@@ -40,6 +40,80 @@ one-off runs are kept as historical optimization checkpoints.
 
 - Reference checks: `{'frechet_min': 0.14875993551681177, 'frechet_max': 771.6627392983846, 'labels_edc_sum': 2485, 'est_mean_a': 0.01500266795292907, 'est_mean_b': 0.8624371652491263, 'est_mean_gamma': 0.02906508271908983}`
 
+## Rust Backend A/B Comparison — 2026-03-09
+
+Revision `9f24784`. First Rust integration: PyO3 bindings for `neg_log_likelihood_sum` and LEC matrix.
+The Rust backend is called per-evaluation from Python's L-BFGS-B optimizer.
+
+### Python backend (`WEATHERISK_BACKEND=python`)
+
+- Total time: mean `9.169s`, min `8.834s`, max `9.317s`, std `0.181s`
+- Peak RSS: mean `0.769 GiB`, max `0.783 GiB`
+- Checks stable: `True`
+- Reference checks: `{'frechet_min': 0.14875993551681177, 'frechet_max': 771.6627392983846, 'labels_edc_sum': 2485, 'est_mean_a': 0.01500266795292907, 'est_mean_b': 0.8624371652491263, 'est_mean_gamma': 0.02906508271908983}`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _run_local_estimation_cmip6 | 2.288 | 2.225 | 2.322 | 0.035 |
+| _incluster_reestimate_cmip6 | 5.736 | 5.525 | 5.852 | 0.130 |
+
+### Rust backend (`WEATHERISK_BACKEND=auto`, Rust detected)
+
+- Total time: mean `12.320s`, min `12.106s`, max `12.516s`, std `0.148s`
+- Peak RSS: mean `0.606 GiB`, max `0.618 GiB`
+- Checks stable: `True`
+- Reference checks: `{'frechet_min': 0.14875993551681177, 'frechet_max': 771.6627392983846, 'labels_edc_sum': 2485, 'est_mean_a': 0.015160195138307478, 'est_mean_b': 0.8625245785429787, 'est_mean_gamma': 0.0289673269060139}`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _run_local_estimation_cmip6 | 2.248 | 2.168 | 2.311 | 0.049 |
+| _incluster_reestimate_cmip6 | 8.940 | 8.792 | 9.026 | 0.084 |
+
+### Analysis
+
+- **Memory**: Rust uses 21% less memory (0.606 vs 0.769 GiB) — the LEC matrix avoids materializing a 3D boolean tensor.
+- **Speed regression**: Rust is 34% slower overall. The bottleneck is `_incluster_reestimate_cmip6` (+56%).
+- **Root cause**: PyO3 boundary crossing overhead. The Python L-BFGS-B optimizer calls into Rust ~350 times per cell (7 finite-difference gradient evaluations × ~50 iterations). Each call converts NumPy arrays to Rust slices and back. The per-call FFI cost (~20µs) dominates compared to the ~5µs Python-native NumPy evaluation.
+- **Next step**: Move the entire optimizer loop into Rust to eliminate FFI overhead. The L-BFGS-B solver, objective function, finite-difference gradient, and bounds checking should all run compiled, crossing PyO3 only once per cell.
+
+## Rust nll_with_gradient A/B Comparison — 2026-03-09
+
+Approach: Keep SciPy's Fortran L-BFGS-B but compute NLL + forward-difference
+gradient in a single Rust FFI call (`nll_with_gradient`). This reduces FFI
+crossings from ~4/iteration (1 f + 3 approx_fprime) to 1/iteration. The pure
+Rust L-BFGS-B (`lbfgsb-rs-pure`) was 14× slower than SciPy's Fortran and was
+abandoned.
+
+### Python backend (`WEATHERISK_BACKEND=python`)
+
+- Total time: mean `9.201s`, min `9.144s`, max `9.304s`, std `0.061s`
+- Peak RSS: mean `0.755 GiB`, max `0.763 GiB`
+- Checks stable: `True`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _run_local_estimation_cmip6 | 2.311 | 2.291 | 2.380 | 0.035 |
+| _incluster_reestimate_cmip6 | 5.731 | 5.701 | 5.769 | 0.027 |
+
+### Rust backend (`WEATHERISK_BACKEND=rust`, nll_with_gradient)
+
+- Total time: mean `8.320s`, min `8.274s`, max `8.417s`, std `0.050s`
+- Peak RSS: mean `0.610 GiB`, max `0.616 GiB`
+- Checks stable: `True`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _run_local_estimation_cmip6 | 2.144 | 2.117 | 2.234 | 0.045 |
+| _incluster_reestimate_cmip6 | 5.019 | 5.007 | 5.030 | 0.008 |
+
+### Analysis
+
+- **Total**: Rust is **9.6% faster** (8.320s vs 9.201s).
+- **Incluster**: 12.4% faster (5.019s vs 5.731s) — the biggest bottleneck.
+- **Local MLE**: 7.2% faster (2.144s vs 2.311s).
+- **Memory**: 19.2% less (0.610 vs 0.755 GiB).
+- **vs previous Rust attempt**: The per-call Rust NLL was 34% *slower*; `nll_with_gradient` is 9.6% *faster*. The `lbfgsb-rs-pure` crate was 14× slower than SciPy's Fortran L-BFGS-B in micro-benchmarks.
+
 ## Historical Optimization Checkpoints
 
 The runs below were useful during implementation, but they are one-off

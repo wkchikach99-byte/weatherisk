@@ -180,6 +180,43 @@ pub fn neg_log_likelihood_sum(
     -sum
 }
 
+/// NLL value AND forward-difference gradient in a single call.
+///
+/// Returns `(f, [df/da, df/db, df/dg])`.
+/// This eliminates FFI overhead: SciPy calls this once per iteration
+/// instead of 4 separate NLL evaluations (1 for f, 3 for approx_fprime).
+pub fn nll_with_gradient(
+    z1: &[f64],
+    z2: &[f64],
+    x: &[f64],
+    y: &[f64],
+    df: f64,
+    alpha: f64,
+    a: f64,
+    b: f64,
+    g: f64,
+) -> (f64, [f64; 3]) {
+    let f0 = neg_log_likelihood_sum(z1, z2, x, y, df, alpha, a, b, g);
+
+    if !f0.is_finite() {
+        return (1e20, [0.0, 0.0, 0.0]);
+    }
+
+    let params = [a, b, g];
+    let eps = 1e-8;
+    let mut grad = [0.0; 3];
+
+    for i in 0..3 {
+        let h = eps * params[i].abs().max(1.0);
+        let mut p = params;
+        p[i] += h;
+        let fp = neg_log_likelihood_sum(z1, z2, x, y, df, alpha, p[0], p[1], p[2]);
+        grad[i] = if fp.is_finite() { (fp - f0) / h } else { 0.0 };
+    }
+
+    (f0, grad)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

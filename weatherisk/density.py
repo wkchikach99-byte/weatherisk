@@ -181,11 +181,24 @@ def pairwise_density_optim(
     parscale = (hi - lo) / 100.0
 
     from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
+    from weatherisk.backend import _USE_RUST
 
-    def neg_llh(par_scaled):
-        par = par_scaled * parscale
-        return _nll_sum(zilist, zjlist, Xlist, Ylist, df, alpha,
-                        par[0], par[1], par[2])
+    _has_jac = False
+    if _USE_RUST:
+        from weatherisk.backend import _rc
+        def neg_llh(par_scaled):
+            par = par_scaled * parscale
+            fval, grad_raw = _rc.nll_with_gradient(
+                zilist, zjlist, Xlist, Ylist, df, alpha,
+                par[0], par[1], par[2],
+            )
+            return fval, grad_raw * parscale  # chain rule for scaling
+        _has_jac = True
+    else:
+        def neg_llh(par_scaled):
+            par = par_scaled * parscale
+            return _nll_sum(zilist, zjlist, Xlist, Ylist, df, alpha,
+                            par[0], par[1], par[2])
 
     # Bounds in scaled space
     lo_s = lo / parscale
@@ -204,6 +217,7 @@ def pairwise_density_optim(
                 neg_llh,
                 starts_scaled[i],
                 method="L-BFGS-B",
+                jac=_has_jac,
                 bounds=list(zip(lo_s, hi_s)),
                 options={"maxiter": 10000},
             )
@@ -216,6 +230,7 @@ def pairwise_density_optim(
                     neg_llh,
                     retry_start,
                     method="L-BFGS-B",
+                    jac=_has_jac,
                     bounds=list(zip(lo_s, hi_s)),
                     options={"maxiter": 10000},
                 )
@@ -303,11 +318,24 @@ def pairwise_density_optim_local(
     parscale = (hi - lo) / 100.0
 
     from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
+    from weatherisk.backend import _USE_RUST
 
-    def neg_llh(par_scaled):
-        par = par_scaled * parscale
-        return _nll_sum(zilist, zjlist, Xlist, Ylist, df, alpha,
-                        par[0], par[1], par[2])
+    _has_jac = False
+    if _USE_RUST:
+        from weatherisk.backend import _rc
+        def neg_llh(par_scaled):
+            par = par_scaled * parscale
+            fval, grad_raw = _rc.nll_with_gradient(
+                zilist, zjlist, Xlist, Ylist, df, alpha,
+                par[0], par[1], par[2],
+            )
+            return fval, grad_raw * parscale
+        _has_jac = True
+    else:
+        def neg_llh(par_scaled):
+            par = par_scaled * parscale
+            return _nll_sum(zilist, zjlist, Xlist, Ylist, df, alpha,
+                            par[0], par[1], par[2])
 
     # Bounds in scaled space
     lo_s = lo / parscale
@@ -329,6 +357,7 @@ def pairwise_density_optim_local(
                 neg_llh,
                 starts_scaled[start_idx],
                 method="L-BFGS-B",
+                jac=_has_jac,
                 bounds=list(zip(lo_s, hi_s)),
                 options={"maxiter": 10000},
             )
@@ -341,6 +370,7 @@ def pairwise_density_optim_local(
                     neg_llh,
                     retry_start,
                     method="L-BFGS-B",
+                    jac=_has_jac,
                     bounds=list(zip(lo_s, hi_s)),
                     options={"maxiter": 10000},
                 )

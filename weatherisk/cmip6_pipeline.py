@@ -310,7 +310,7 @@ def _incluster_estimate_one(
     cl: int,
 ) -> tuple[int, np.ndarray, int]:
     """Estimate one cluster for the in-cluster re-estimation step."""
-    from weatherisk.density import pairwise_density_optim
+    from weatherisk.backend import optimize_pairwise_density
 
     mask = labels == cl
     n_cl = int(mask.sum())
@@ -322,7 +322,7 @@ def _incluster_estimate_one(
     Y_cl = grid_coords[mask, 0]
 
     try:
-        est = pairwise_density_optim(
+        est = optimize_pairwise_density(
             z_cl, cfg.df, cfg.alpha, X_cl, Y_cl,
             upper_bounds=(15.0, 15.0),
             max_dist=4.0 * cfg.neighbor_radius,
@@ -652,33 +652,12 @@ def _local_mle_one_cmip6(
     if len(zi) < 5:
         return np.array([1.0, 0.0, 0.0])
 
-    lo = np.array([0.01, 0.0, -np.pi / 2])
-    hi = np.array([15.0, 15.0, np.pi / 2])
+    from weatherisk.backend import optimize_local_mle
 
-    from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
-
-    def neg_llh(p):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            v = _nll_sum(zi, zj, xl, yl, cfg.df, cfg.alpha, p[0], p[1], p[2])
-        return v if np.isfinite(v) else 1e20
-
-    sampler = qmc.LatinHypercube(d=3, seed=42 + cidx)
-    starts = qmc.scale(sampler.random(n=max(cfg.mle_ensemble, 5)), lo, hi)
-
-    best_v, best_p = np.inf, np.array([1.0, 0.0, 0.0])
-    for s in range(cfg.mle_ensemble):
-        try:
-            r = minimize(
-                neg_llh, starts[s], method="L-BFGS-B",
-                bounds=list(zip(lo, hi)),
-                options={"maxiter": 10000, "ftol": 1e-10},
-            )
-            if r.fun < best_v:
-                best_v, best_p = r.fun, r.x.copy()
-        except Exception:
-            pass
-    return best_p
+    return optimize_local_mle(
+        zi, zj, xl, yl, cfg.df, cfg.alpha,
+        ensemble=cfg.mle_ensemble, seed=42 + cidx,
+    )
 
 
 def _run_local_estimation_cmip6(
