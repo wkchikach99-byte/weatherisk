@@ -114,6 +114,80 @@ abandoned.
 - **Memory**: 19.2% less (0.610 vs 0.755 GiB).
 - **vs previous Rust attempt**: The per-call Rust NLL was 34% *slower*; `nll_with_gradient` is 9.6% *faster*. The `lbfgsb-rs-pure` crate was 14× slower than SciPy's Fortran L-BFGS-B in micro-benchmarks.
 
+## Rust Kernel Optimisation — 2026-03-10
+
+Deep optimisation of the inner `pairwise_density_summand` kernel in Rust.
+All changes preserve mathematical equivalence (parity tests pass to 1e-12
+element-wise).
+
+**Optimisations applied:**
+
+1. **CSE on `powf`**: 14 `powf()` calls per element → 2 base powers
+   `z^(1/df)`, all other fractional exponents derived via mul/div.
+2. **Closed-form `t_cdf`**: For integer `df/2` (covers default df=5),
+   replaced iterative `beta_reg` with exact polynomial
+   `I_z(a, 1/2) = 1 − √(1−z) Σ c_j z^j`. 5–8× faster than statrs.
+3. **Fast `t_pdf`**: Precomputed log-coefficient (avoids 2× `ln_gamma`
+   per call). Integer-power decomposition for half-integer exponents
+   (e.g., `u^{-3.5} = 1/(u³√u)`) replaces one `powf` per call.
+4. **Inlined `dtdiff`**: Reuses `t_pdf` values already computed for
+   `dt_m1`/`dt_m2`, eliminating 2 redundant `t_pdf` evaluations.
+5. **Covariance caching**: In `neg_log_likelihood_sum`, detects contiguous
+   (x,y) blocks (from `np.repeat` in pair-building) and computes
+   `cov_fkt_2d` once per spatial pair — 48× reduction for n_sim=48.
+6. **`alpha=1.0` fast path**: Skips `powf(alpha)` in `cov_fkt_2d`
+   when `alpha=1.0` (the pipeline default).
+
+### Micro-benchmark: kernel ns/element
+
+| Metric | Before | After | Speedup |
+| --- | ---: | ---: | ---: |
+| `neg_log_likelihood_sum` µs/call | 3366 | 471 | **7.1×** |
+| Per-element ns | 369 | 52 | **7.1×** |
+| `nll_with_gradient` µs/call | 13700 | 1858 | **7.4×** |
+| NLL/trivial ratio | 742× | 118× | 6.3× more efficient |
+
+### Scaling: full optimization time by cluster size
+
+| Cells | Before | After | Speedup |
+| ---: | ---: | ---: | ---: |
+| 10 | 0.184s | 0.023s | **8.0×** |
+| 20 | 0.496s | 0.087s | **5.7×** |
+| 30 | 1.243s | 0.275s | **4.5×** |
+| 50 | 4.702s | 0.876s | **5.4×** |
+
+### Python backend (`WEATHERISK_BACKEND=python`)
+
+- Total time: mean `9.281s`, min `8.955s`, max `9.506s`, std `0.191s`
+- Peak RSS: mean `0.769 GiB`, max `0.791 GiB`
+- Checks stable: `True`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _run_local_estimation_cmip6 | 2.341 | 2.224 | 2.376 | 0.059 |
+| _incluster_reestimate_cmip6 | 5.740 | 5.571 | 5.858 | 0.113 |
+
+### Rust backend (`WEATHERISK_BACKEND=rust`, optimised kernel)
+
+- Total time: mean `3.270s`, min `3.214s`, max `3.400s`, std `0.070s`
+- Peak RSS: mean `0.600 GiB`, max `0.610 GiB`
+- Checks stable: `True`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _compute_frechet_global | 1.059 | 1.025 | 1.134 | 0.041 |
+| _run_local_estimation_cmip6 | 0.702 | 0.690 | 0.728 | 0.014 |
+| _incluster_reestimate_cmip6 | 1.377 | 1.365 | 1.403 | 0.014 |
+
+### Analysis
+
+- **Total**: Rust is **2.84× faster** than Python (3.270s vs 9.281s, 64.8% reduction).
+- **Incluster**: **4.17× faster** (1.377s vs 5.740s, 76.0% reduction).
+- **Local MLE**: **3.34× faster** (0.702s vs 2.341s, 70.0% reduction).
+- **Memory**: 22% less (0.600 vs 0.769 GiB).
+- **vs previous Rust**: **2.54× faster** than the pre-optimisation Rust (3.270s vs 8.320s).
+- **Bottleneck shift**: `_compute_frechet_global` (GEV fitting, pure SciPy) is now 32% of total time. The NLL kernel is no longer the dominant cost.
+
 ## Historical Optimization Checkpoints
 
 The runs below were useful during implementation, but they are one-off
