@@ -215,3 +215,63 @@ def maps(
 
     saved = gen(result, verbose=verbose)
     click.echo(f"\nDone. {len(saved)} maps saved to {output_dir}")
+
+
+@main.command()
+@click.option(
+    "--data-dir", default=None,
+    help="Directory containing AWI-ESM-1-1-LR pr NetCDF files.",
+)
+@click.option("--output-dir", default="output/cmip6_fig9", help="Output directory.")
+@click.option("--workers", default=1, help="Number of parallel workers.")
+@click.option("--year-start", default=1850, help="First year (inclusive).")
+@click.option("--year-end", default=2005, help="Last year (inclusive).")
+@click.option("--dpi", default=300, help="Figure DPI.")
+@click.option("--no-plots", is_flag=True, help="Skip figure generation.")
+@click.option("--quiet", is_flag=True, help="Suppress progress output.")
+def cmip6(
+    data_dir: str | None,
+    output_dir: str,
+    workers: int,
+    year_start: int,
+    year_end: int,
+    dpi: int,
+    no_plots: bool,
+    quiet: bool,
+) -> None:
+    """Reproduce Figure 9: LEC/EDC clustering on AWI-ESM-1-1-LR precipitation.
+
+    Downloads data automatically if not found locally or on HPC.
+    Uses STL de-trending, annual maxima of monthly data, GEV → Fréchet.
+
+    \b
+    Paper parameters: ν=5, α=1, ε=5 (grid point distance)
+    Expected: k_EDC ≈ 104, k_LEC ≈ 24
+
+    \b
+    Example:
+        weatherisk cmip6
+        weatherisk cmip6 --workers 16
+        weatherisk cmip6 --data-dir /pool/data/.../pr/gn/
+    """
+    from weatherisk.cmip6_pipeline import CMIP6Config, run_cmip6_pipeline, plot_figure9
+    from weatherisk.cmip6_data import DEFAULT_DATA_DIR
+
+    cfg = CMIP6Config(
+        data_dir=data_dir or DEFAULT_DATA_DIR,
+        output_dir=output_dir,
+        year_start=year_start,
+        year_end=year_end,
+        n_workers=workers,
+    )
+
+    verbose = not quiet
+    result = run_cmip6_pipeline(cfg, verbose=verbose)
+
+    if no_plots:
+        click.echo(f"Pipeline done. LEC k={result['k_lec']}, "
+                    f"EDC k={result['k_edc']}. Plots skipped.")
+        return
+
+    saved = plot_figure9(result, dpi=dpi, verbose=verbose)
+    click.echo(f"\nDone. {len(saved)} figures saved to {output_dir}")

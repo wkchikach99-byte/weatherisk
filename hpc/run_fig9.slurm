@@ -1,0 +1,73 @@
+#!/bin/bash
+#SBATCH --job-name=fig9_cmip6
+#SBATCH --partition=batch
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --time=12:00:00
+#SBATCH --output=logs/fig9_%j.out
+#SBATCH --error=logs/fig9_%j.err
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=wikchi001@awi.de
+
+# ============================================================
+#  SLURM job: Reproduce Figure 9 from Contzen et al. (2025)
+#
+#  AWI-ESM-1-1-LR monthly precipitation → STL → annual maxima
+#  → GEV → Fréchet → LEC/EDC clustering → cluster maps
+#
+#  Submit:
+#    sbatch hpc/run_fig9.slurm
+#
+#  Monitor:
+#    squeue -u wikchi001
+#    tail -f logs/fig9_*.out
+#
+#  NOTE: Edit --account if required by your allocation.
+#        Check with: sacctmgr show assoc user=wikchi001
+#        Then add:   #SBATCH --account=<project_id>
+# ============================================================
+
+echo "============================================"
+echo "  Job started: $(date)"
+echo "  Node: $(hostname)"
+echo "  Job ID: ${SLURM_JOB_ID}"
+echo "  CPUs: ${SLURM_CPUS_PER_TASK}"
+echo "============================================"
+
+# ── Setup ──────────────────────────────────────────────────────
+WORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "${WORK_DIR}"
+
+mkdir -p logs
+
+# Load Python
+module purge 2>/dev/null || true
+module load python/3.11 2>/dev/null || module load python/3.10 2>/dev/null || \
+    module load anaconda3 2>/dev/null || true
+
+# Activate venv
+if [ -f "${WORK_DIR}/.venv/bin/activate" ]; then
+    source "${WORK_DIR}/.venv/bin/activate"
+fi
+
+echo "  Python: $(python3 --version) ($(which python3))"
+echo "  Working dir: ${WORK_DIR}"
+echo ""
+
+# Set threading
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export OPENBLAS_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+
+# ── Run pipeline ──────────────────────────────────────────────
+python3 scripts/reproduce_fig9.py \
+    --workers ${SLURM_CPUS_PER_TASK} \
+    --output-dir output/cmip6_fig9 \
+    --dpi 300
+
+echo ""
+echo "============================================"
+echo "  Job finished: $(date)"
+echo "============================================"
