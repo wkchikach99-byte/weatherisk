@@ -1,0 +1,61 @@
+- run				sh run.sh -n nameoffolder
+	with nameoffolder the name of the folder to be created
+- the option -s causes the analyses only to be run with parameters df=5, alpha=1.0 (hardcoded in run.sh)
+- createsd is a folder [nameofexperiment] with an .rdata-file containing all the results
+- the file can be analyzed and plots can be created using 3. Max-stable/R/plots.R
+
+
+- to run only some parts: use sh run_[...].sh -n [nameofexperiment]
+- the folder [nameofexperiment] must already exist! it must contain the folders "res" and "logs"
+- "res" must contain "simulation.rds" if run_fromlocest is used, and additional files if run_frominclusters is used
+
+
+- to run with other values for locest_dist and smoothing_distance than specified in parameters.R, use run_fromlocest_override.sh:
+	sh run_fromlocest_override.sh nameoffolder locest_dist smoothing_distance  (always runs as if -s were set)
+	
+	
+sh run_fromlocest_override.sh new_stripes_e2_m0 2 0
+
+sh run_fromlocest_override.sh new_stripes_e2_m1 2 1
+sh run_fromlocest_override.sh new_stripes_e2_m2 2 2
+sh run_fromlocest_override.sh new_stripes_e2_m3 2 3
+sh run_fromlocest_override.sh new_stripes_e3_m0 3 0
+sh run_fromlocest_override.sh new_stripes_e3_m1 3 1
+sh run_fromlocest_override.sh new_stripes_e3_m2 3 2
+sh run_fromlocest_override.sh new_stripes_e3_m3 3 3
+sh run_fromlocest_override.sh new_stripes_e4_m0 4 0
+sh run_fromlocest_override.sh new_stripes_e4_m1 4 1
+
+sh run_fromlocest_override.sh new_stripes_e4_m3 4 3
+sh run_fromlocest_override.sh new_stripes_e5_m0 5 0
+sh run_fromlocest_override.sh new_stripes_e5_m1 5 1
+sh run_fromlocest_override.sh new_stripes_e5_m2 5 2
+sh run_fromlocest_override.sh new_stripes_e5_m3 5 3
+sh run_fromlocest_override.sh new_stripes_e6_m0 6 0
+sh run_fromlocest_override.sh new_stripes_e6_m1 6 1
+sh run_fromlocest_override.sh new_stripes_e6_m2 6 2
+sh run_fromlocest_override.sh new_stripes_e6_m3 6 3
+
+to run individual jobs:
+sbatch -J X_finish --parsable -o new_stripes_e2_m1/logs/X_finish.out cX_finish.sh new_stripes_e2_m1
+sbatch -J X_finish --parsable -o new_stripes_e2_m2/logs/X_finish.out cX_finish.sh new_stripes_e2_m2
+sbatch -J X_finish --parsable -o new_stripes_e2_m3/logs/X_finish.out cX_finish.sh new_stripes_e2_m3
+sbatch -J X_finish --parsable -o new_stripes_e3_m0/logs/X_finish.out cX_finish.sh new_stripes_e3_m0
+sbatch -J X_finish --parsable -o new_stripes_e3_m1/logs/X_finish.out cX_finish.sh new_stripes_e3_m1
+sbatch -J X_finish --parsable -o new_stripes_e3_m2/logs/X_finish.out cX_finish.sh new_stripes_e3_m2
+sbatch -J X_finish --parsable -o new_stripes_e3_m3/logs/X_finish.out cX_finish.sh new_stripes_e3_m3
+sbatch -J X_finish --parsable -o new_stripes_e4_m0/logs/X_finish.out cX_finish.sh new_stripes_e4_m0
+sbatch -J X_finish --parsable -o new_stripes_e4_m1/logs/X_finish.out cX_finish.sh new_stripes_e4_m1
+sbatch -J X_finish --parsable -o new_stripes_e4_m3/logs/X_finish.out cX_finish.sh new_stripes_e4_m3
+sbatch -J X_finish --parsable -o new_stripes_e5_m0/logs/X_finish.out cX_finish.sh new_stripes_e5_m0
+sbatch -J X_finish --parsable -o new_stripes_e5_m1/logs/X_finish.out cX_finish.sh new_stripes_e5_m1
+sbatch -J X_finish --parsable -o new_stripes_e5_m2/logs/X_finish.out cX_finish.sh new_stripes_e5_m2
+sbatch -J X_finish --parsable -o new_stripes_e6_m0/logs/X_finish.out cX_finish.sh new_stripes_e6_m0
+sbatch -J X_finish --parsable -o new_stripes_e6_m1/logs/X_finish.out cX_finish.sh new_stripes_e6_m1
+sbatch -J X_finish --parsable -o new_stripes_e6_m2/logs/X_finish.out cX_finish.sh new_stripes_e6_m2
+
+
+
+sbatch -J 7_ilm510 --parsable -o stripes_varnumcl_1/logs/7_inclusters_locest_merge_5_10.out c7_inclusters_locest_merge.sh stripes_varnumcl_1 5 10
+sbatch -J 9_ism510 --parsable -o stripes_varnumcl_1/logs/9_inclusters_saunders_merge_5_10.out c9_inclusters_saunders_merge.sh stripes_varnumcl_1 5 10
+sbatch -J X_finish --parsable -o stripes_varnumcl_1/logs/X_finish.out cX_finish.sh stripes_varnumcl_1

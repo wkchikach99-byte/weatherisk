@@ -1,0 +1,38 @@
+# R Reference Data Manifest
+# Generated: 2026-02-24 19:20:01.539036
+# R version: R version 4.5.2 (2025-10-31)
+
+grid_coordinates.csv  —  Grid coordinates, column-major (R order). Cols: flat_index, X, Y
+parameter_matrices.csv  —  True a, b, gamma parameter matrices (stripes preset), column-major
+scalar_parameters.csv  —  Scalar parameters for stripes preset
+x_axis.csv  —  x-axis values
+y_axis.csv  —  y-axis values (high to low)
+cov_fkt_2d_test_cases.csv  —  cov_fkt_2d evaluated at various (x,y,a,b,g,alpha) combinations
+cov_fkt_2d_alpha_cases.csv  —  cov_fkt_2d with various alpha values
+cov_nonstat_test_cases.csv  —  cov_fkt_2d_nonstat2 evaluated at various parameter combinations
+cov_to_ec_test_cases.csv  —  cov_to_ec conversion for various (df, cov) combinations
+ec_to_cov_test_cases.csv  —  ec_to_cov inverse conversion for various (df, ec) combinations
+pairwise_density_test_cases.csv  —  pairwise_density_summand for various (z1,z2,x,y,df,alpha,a,b,g)
+dtdiff_test_cases.csv  —  dtdiff (derivative of t-density) for various (x, df)
+simulation_stationary_seed42.csv  —  Stationary simulation (a=2,b=1,g=0,df=5,alpha=1, seed=42, 5 sims)
+simulation_nonstat_seed42.csv  —  Non-stationary stripes simulation (seed=42, 10 sims)
+covariance_matrix_stationary.csv  —  100x100 covariance matrix for stationary sim (a=2,b=1,g=0)
+covariance_matrix_nonstationary.csv  —  100x100 non-stationary covariance matrix for stripes preset
+madogram_matrix.csv  —  100x100 madogram (nu_ij) matrix from stripes simulation
+extremal_coefficient_matrix.csv  —  100x100 extremal coefficient (theta-1) matrix
+local_estimates_selected_points.csv  —  Local estimates at 5 grid points (R 1-based), with true values
+local_estimates_all.csv  —  Local estimates for all 100 grid points (raw, before smoothing)
+local_estimates_smoothed.csv  —  Smoothed local estimates (smoothing_dist=1)
+ellipse_dissimilarity_matrix.csv  —  100x100 LEC ellipse dissimilarity matrix (x100)
+hclust_lec_details.csv  —  LEC hierarchical clustering: merge indices, heights
+hclust_lec_order.csv  —  LEC hierarchical clustering: leaf order
+clusters_lec.csv  —  LEC cluster assignments (k=22, threshold=q10)
+lec_clustering_params.csv  —  LEC clustering parameters: k and q10 threshold
+hclust_saunders_details.csv  —  EDC hierarchical clustering: merge indices, heights
+hclust_saunders_order.csv  —  EDC hierarchical clustering: leaf order
+clusters_saunders.csv  —  Saunders/EDC cluster assignments (k=12, threshold=q30)
+saunders_clustering_params.csv  —  Saunders clustering parameters: k and q30 threshold
+llh_in_clusters_lec.csv  —  Log-likelihood per LEC cluster using mean smoothed estimates
+grid_number_test_cases.csv  —  grid_number(i,j) results for verification (R 1-based)
+number_grid_test_cases.csv  —  number_grid(n) results for verification (R 1-based)
+koord_num_test_cases.csv  —  koord_num(x,y) nearest-grid-point results (R 1-based index)

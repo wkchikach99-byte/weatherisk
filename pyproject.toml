@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weatherisk"
+version = "0.1.0"
+description = "Climate risk analysis via max-stable process clustering"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Karl J."},
+]
+keywords = ["climate", "risk", "extreme-value", "max-stable", "clustering"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+    "click>=8.0",
+    "xarray>=2023.1",
+    "netCDF4>=1.6",
+    "scikit-learn>=1.3",
+    "cartopy>=0.21",
+    "h5py>=3.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1",
+    "mypy>=1.5",
+    "pyreadr>=0.5",
+]
+
+[project.scripts]
+weatherisk = "weatherisk.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["weatherisk*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
