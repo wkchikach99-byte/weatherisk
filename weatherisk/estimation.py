@@ -162,7 +162,7 @@ def llh_in_cluster(
     average: bool = False,
 ) -> float:
     """Log-likelihood of a cluster given its estimated parameters."""
-    from weatherisk.density import pairwise_density_summand
+    from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
 
     n_grid = len(X)
     if sim_data.ndim == 3:
@@ -196,12 +196,11 @@ def llh_in_cluster(
     if len(zilist) == 0:
         return 0.0
 
-    lh = float(np.sum(
-        pairwise_density_summand(
-            zilist, zjlist, Xlist, Ylist, df, alpha,
-            locest[0], locest[1], locest[2],
-        )
-    ))
+    # neg_log_likelihood_sum returns -sum, so negate for log-likelihood
+    lh = -_nll_sum(
+        zilist, zjlist, Xlist, Ylist, df, alpha,
+        locest[0], locest[1], locest[2],
+    )
     if average:
         lh /= len(zilist)
     return lh

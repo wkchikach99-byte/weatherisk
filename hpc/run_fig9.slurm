@@ -6,8 +6,8 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=220G
 #SBATCH --time=12:00:00
-#SBATCH --output=logs/fig9_%j.out
-#SBATCH --error=logs/fig9_%j.err
+#SBATCH --output=/albedo/work/user/wikchi001/weatherisk/logs/fig9_%j.out
+#SBATCH --error=/albedo/work/user/wikchi001/weatherisk/logs/fig9_%j.err
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=wikchi001@awi.de
 #SBATCH --account=paleodyn.paleodyn

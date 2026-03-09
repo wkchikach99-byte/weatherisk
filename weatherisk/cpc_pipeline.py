@@ -311,11 +311,12 @@ def _local_mle_one(frechet, cidx, coords, cfg: PipelineConfig):
     lo = np.array([0.01, 0.0, -np.pi / 2])
     hi = np.array([15.0, 15.0, np.pi / 2])
 
+    from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
+
     def neg_llh(p):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            v = -np.sum(pairwise_density_summand(
-                zi, zj, xl, yl, cfg.df, cfg.alpha, p[0], p[1], p[2]))
+            v = _nll_sum(zi, zj, xl, yl, cfg.df, cfg.alpha, p[0], p[1], p[2])
         return v if np.isfinite(v) else 1e20
 
     sampler = qmc.LatinHypercube(d=3, seed=42 + cidx)

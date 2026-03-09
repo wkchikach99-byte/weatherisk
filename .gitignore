@@ -11,4 +11,4 @@ data/netcdf/
 
 /data/
 /output/
-/logs/
+/logs/crates/weatherisk_core/target/

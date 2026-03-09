@@ -180,12 +180,12 @@ def pairwise_density_optim(
     # Parscale: match R's (upper - lower) / 100
     parscale = (hi - lo) / 100.0
 
+    from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
+
     def neg_llh(par_scaled):
         par = par_scaled * parscale
-        return -np.sum(
-            pairwise_density_summand(zilist, zjlist, Xlist, Ylist, df, alpha,
-                                     par[0], par[1], par[2])
-        )
+        return _nll_sum(zilist, zjlist, Xlist, Ylist, df, alpha,
+                        par[0], par[1], par[2])
 
     # Bounds in scaled space
     lo_s = lo / parscale
@@ -302,12 +302,12 @@ def pairwise_density_optim_local(
     # Parscale: match R's (upper - lower) / 100
     parscale = (hi - lo) / 100.0
 
+    from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
+
     def neg_llh(par_scaled):
         par = par_scaled * parscale
-        return -np.sum(
-            pairwise_density_summand(zilist, zjlist, Xlist, Ylist, df, alpha,
-                                     par[0], par[1], par[2])
-        )
+        return _nll_sum(zilist, zjlist, Xlist, Ylist, df, alpha,
+                        par[0], par[1], par[2])
 
     # Bounds in scaled space
     lo_s = lo / parscale
