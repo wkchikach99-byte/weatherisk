@@ -27,16 +27,21 @@ Pipeline steps:
 
 from __future__ import annotations
 
+import gc
+import json
 import os
+import shutil
 import time
 import warnings
 from dataclasses import dataclass
 from multiprocessing import Pool
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 from scipy.cluster.hierarchy import fcluster
 from scipy.optimize import minimize
+from scipy.spatial.distance import squareform
 from scipy.spatial.distance import cdist
 from scipy.stats import qmc, rankdata
 
@@ -91,9 +96,149 @@ class CMIP6Config:
     # Parallelism
     n_workers: int = 1
 
+    # Clustering memory controls
+    lec_chunk_size: int = 64
+    retain_clustering_artifacts: bool = False
+
+    # Checkpointing
+    checkpoint_dir: str | None = None
+    cleanup_checkpoints_on_success: bool = True
+
     @property
     def years(self) -> range:
         return range(self.year_start, self.year_end + 1)
+
+
+_CHECKPOINT_STAGE_ORDER = ("step2", "step3", "step4")
+
+
+def _checkpoint_signature(cfg: CMIP6Config) -> dict[str, Any]:
+    """Return the config subset that must match for checkpoint reuse."""
+    return {
+        "data_dir": os.path.abspath(cfg.data_dir),
+        "year_start": int(cfg.year_start),
+        "year_end": int(cfg.year_end),
+        "df": float(cfg.df),
+        "alpha": float(cfg.alpha),
+        "neighbor_radius": float(cfg.neighbor_radius),
+        "smoothing_radius": float(cfg.smoothing_radius),
+        "mle_ensemble": int(cfg.mle_ensemble),
+        "quantile_threshold": float(cfg.quantile_threshold),
+        "stl_period": int(cfg.stl_period),
+    }
+
+
+def _checkpoint_dir(cfg: CMIP6Config) -> Path:
+    """Return the checkpoint directory for a CMIP6 run."""
+    if cfg.checkpoint_dir is not None:
+        return Path(cfg.checkpoint_dir)
+    return Path(cfg.output_dir) / "checkpoints"
+
+
+def _checkpoint_manifest_path(cfg: CMIP6Config) -> Path:
+    return _checkpoint_dir(cfg) / "manifest.json"
+
+
+def _checkpoint_data_path(cfg: CMIP6Config, stage: str) -> Path:
+    return _checkpoint_dir(cfg) / f"{stage}.npz"
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    tmp_path = path.with_name(f"{path.stem}.tmp{path.suffix}")
+    with tmp_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, sort_keys=True)
+    os.replace(tmp_path, path)
+
+
+def _atomic_savez(path: Path, **arrays: np.ndarray | int | float) -> None:
+    tmp_path = path.with_name(f"{path.stem}.tmp.npz")
+    np.savez_compressed(tmp_path, **arrays)
+    os.replace(tmp_path, path)
+
+
+def _cleanup_checkpoints(cfg: CMIP6Config, *, verbose: bool = True) -> None:
+    checkpoint_dir = _checkpoint_dir(cfg)
+    if checkpoint_dir.exists():
+        shutil.rmtree(checkpoint_dir)
+        if verbose:
+            print(f"  Removed checkpoints from {checkpoint_dir}")
+
+
+def _write_checkpoint(
+    cfg: CMIP6Config,
+    stage: str,
+    *,
+    verbose: bool = True,
+    **arrays: np.ndarray | int | float,
+) -> None:
+    """Persist one pipeline stage so failed jobs can resume automatically."""
+    checkpoint_dir = _checkpoint_dir(cfg)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    data_path = _checkpoint_data_path(cfg, stage)
+    _atomic_savez(data_path, **arrays)
+    _atomic_write_json(
+        _checkpoint_manifest_path(cfg),
+        {
+            "signature": _checkpoint_signature(cfg),
+            "stage": stage,
+            "stages": {s: _checkpoint_data_path(cfg, s).name for s in _CHECKPOINT_STAGE_ORDER},
+        },
+    )
+    if verbose:
+        print(f"  Saved checkpoint: {stage}")
+
+
+def _load_npz_dict(path: Path) -> dict[str, np.ndarray]:
+    with np.load(path, allow_pickle=False) as payload:
+        return {key: payload[key] for key in payload.files}
+
+
+def _load_checkpoint(cfg: CMIP6Config, *, verbose: bool = True) -> dict[str, Any] | None:
+    """Load the latest compatible checkpoint if one exists."""
+    manifest_path = _checkpoint_manifest_path(cfg)
+    if not manifest_path.exists():
+        return None
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        if verbose:
+            print("  Ignoring unreadable checkpoint manifest; starting fresh.")
+        _cleanup_checkpoints(cfg, verbose=False)
+        return None
+
+    if manifest.get("signature") != _checkpoint_signature(cfg):
+        if verbose:
+            print("  Ignoring stale checkpoints with mismatched configuration.")
+        _cleanup_checkpoints(cfg, verbose=False)
+        return None
+
+    stage = manifest.get("stage")
+    if stage not in _CHECKPOINT_STAGE_ORDER:
+        if verbose:
+            print("  Ignoring checkpoint with unknown stage; starting fresh.")
+        _cleanup_checkpoints(cfg, verbose=False)
+        return None
+
+    required_stages = _CHECKPOINT_STAGE_ORDER[: _CHECKPOINT_STAGE_ORDER.index(stage) + 1]
+    loaded: dict[str, Any] = {"stage": stage}
+    try:
+        for stage_name in required_stages:
+            loaded[stage_name] = _load_npz_dict(_checkpoint_data_path(cfg, stage_name))
+    except Exception:
+        if verbose:
+            print("  Ignoring incomplete checkpoints; starting fresh.")
+        _cleanup_checkpoints(cfg, verbose=False)
+        return None
+
+    if verbose:
+        print(f"  Resuming from checkpoint: {stage}")
+    return loaded
+
+
+def _npz_scalar(value: np.ndarray, caster: type[int] | type[float] = int) -> int | float:
+    """Convert a 0-D npz payload back to a Python scalar."""
+    return caster(np.asarray(value).item())
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -105,6 +250,10 @@ _MLE_FRECHET: np.ndarray | None = None
 _MLE_GRID_COORDS: np.ndarray | None = None
 _MLE_CFG: CMIP6Config | None = None
 _GEV_AM_FLAT: np.ndarray | None = None
+_INCLUSTER_FRECHET: np.ndarray | None = None
+_INCLUSTER_GRID_COORDS: np.ndarray | None = None
+_INCLUSTER_LABELS: np.ndarray | None = None
+_INCLUSTER_CFG: CMIP6Config | None = None
 
 
 def _mle_worker_init(frechet, grid_coords, cfg):
@@ -143,6 +292,58 @@ def _gev_worker(cidx):
         return cidx, fr, np.array([loc, scale, shape]), True
     except Exception:
         return cidx, None, np.array([np.nan, np.nan, np.nan]), False
+
+
+def _incluster_worker_init(frechet, grid_coords, labels, cfg):
+    """Initializer for in-cluster re-estimation worker pool."""
+    global _INCLUSTER_FRECHET, _INCLUSTER_GRID_COORDS, _INCLUSTER_LABELS, _INCLUSTER_CFG
+    _INCLUSTER_FRECHET = frechet
+    _INCLUSTER_GRID_COORDS = grid_coords
+    _INCLUSTER_LABELS = labels
+    _INCLUSTER_CFG = cfg
+
+
+def _incluster_estimate_one(
+    frechet: np.ndarray,
+    grid_coords: np.ndarray,
+    labels: np.ndarray,
+    cfg: CMIP6Config,
+    cl: int,
+) -> tuple[int, np.ndarray, int]:
+    """Estimate one cluster for the in-cluster re-estimation step."""
+    from weatherisk.density import pairwise_density_optim
+
+    mask = labels == cl
+    n_cl = int(mask.sum())
+    if n_cl < 3:
+        return cl, np.array([1.0, 0.0, 0.0]), n_cl
+
+    z_cl = frechet[:, mask].T
+    X_cl = grid_coords[mask, 1]
+    Y_cl = grid_coords[mask, 0]
+
+    try:
+        est = pairwise_density_optim(
+            z_cl, cfg.df, cfg.alpha, X_cl, Y_cl,
+            upper_bounds=(15.0, 15.0),
+            max_dist=4.0 * cfg.neighbor_radius,
+            ensemble=3,
+        )
+    except Exception:
+        est = np.array([1.0, 0.0, 0.0])
+
+    return cl, est, n_cl
+
+
+def _incluster_worker(cl: int) -> tuple[int, np.ndarray, int]:
+    """Worker for parallel in-cluster re-estimation."""
+    return _incluster_estimate_one(
+        _INCLUSTER_FRECHET,
+        _INCLUSTER_GRID_COORDS,
+        _INCLUSTER_LABELS,
+        _INCLUSTER_CFG,
+        cl,
+    )
 
 
 def _compute_frechet_one(am_flat: np.ndarray, cidx: int):
@@ -633,13 +834,24 @@ def _run_clustering_cmip6(
     if verbose:
         print("  Computing LEC dissimilarity (ellipse overlap D₂) …")
     t0 = time.time()
-    dm_lec = calc_distance_ellipses(smoothed, res=21)
-    hc_lec = clustering(dm_lec)
-    vec_lec = dm_lec[np.triu_indices_from(dm_lec, k=1)]
-    thr_lec = np.quantile(vec_lec, cfg.quantile_threshold)
+    dm_lec = calc_distance_ellipses(
+        smoothed,
+        res=21,
+        chunk_size=cfg.lec_chunk_size,
+    )
+    lec_condensed = squareform(dm_lec, checks=False)
+    thr_lec = float(np.quantile(lec_condensed, cfg.quantile_threshold))
+    hc_lec = clustering(lec_condensed)
     k_lec = cluster_number_threshold_method(hc_lec, thr_lec)
     k_lec = max(2, k_lec)
     labels_lec = fcluster(hc_lec, t=k_lec, criterion="maxclust")
+    dm_lec_out = dm_lec if cfg.retain_clustering_artifacts else None
+    hc_lec_out = hc_lec if cfg.retain_clustering_artifacts else None
+    del lec_condensed
+    if not cfg.retain_clustering_artifacts:
+        del dm_lec
+        del hc_lec
+        gc.collect()
     if verbose:
         print(f"  LEC → k = {k_lec}  "
               f"(30%-quantile threshold = {thr_lec:.3f})  "
@@ -650,12 +862,19 @@ def _run_clustering_cmip6(
         print("  Computing EDC dissimilarity (madogram D₁) …")
     t0 = time.time()
     dm_edc = _edc_matrix_flat(frechet)
-    hc_edc = clustering(dm_edc)
-    vec_edc = dm_edc[np.triu_indices_from(dm_edc, k=1)]
-    thr_edc = np.quantile(vec_edc, cfg.quantile_threshold)
+    edc_condensed = squareform(dm_edc, checks=False)
+    thr_edc = float(np.quantile(edc_condensed, cfg.quantile_threshold))
+    hc_edc = clustering(edc_condensed)
     k_edc = cluster_number_threshold_method(hc_edc, thr_edc)
     k_edc = max(2, k_edc)
     labels_edc = fcluster(hc_edc, t=k_edc, criterion="maxclust")
+    dm_edc_out = dm_edc if cfg.retain_clustering_artifacts else None
+    hc_edc_out = hc_edc if cfg.retain_clustering_artifacts else None
+    del edc_condensed
+    if not cfg.retain_clustering_artifacts:
+        del dm_edc
+        del hc_edc
+        gc.collect()
     if verbose:
         print(f"  EDC → k = {k_edc}  "
               f"(30%-quantile threshold = {thr_edc:.5f})  "
@@ -663,9 +882,9 @@ def _run_clustering_cmip6(
 
     return dict(
         labels_lec=labels_lec, k_lec=k_lec,
-        hc_lec=hc_lec, dm_lec=dm_lec,
+        hc_lec=hc_lec_out, dm_lec=dm_lec_out,
         labels_edc=labels_edc, k_edc=k_edc,
-        hc_edc=hc_edc, dm_edc=dm_edc,
+        hc_edc=hc_edc_out, dm_edc=dm_edc_out,
     )
 
 
@@ -683,39 +902,37 @@ def _incluster_reestimate_cmip6(
     verbose: bool = True,
 ) -> dict[int, np.ndarray]:
     """Re-estimate (a, b, γ) per cluster via global pairwise CL MLE."""
-    from weatherisk.density import pairwise_density_optim
-
     unique_cl = sorted(np.unique(labels))
     if verbose:
         print(f"  {tag}: re-estimating {len(unique_cl)} clusters …")
 
     results: dict[int, np.ndarray] = {}
-    for cl in unique_cl:
-        mask = labels == cl
-        n_cl = int(mask.sum())
-        if n_cl < 3:
-            results[cl] = np.array([1.0, 0.0, 0.0])
-            continue
 
-        z_cl = frechet[:, mask].T
-        X_cl = grid_coords[mask, 1]
-        Y_cl = grid_coords[mask, 0]
-
-        try:
-            est = pairwise_density_optim(
-                z_cl, cfg.df, cfg.alpha, X_cl, Y_cl,
-                upper_bounds=(15.0, 15.0),
-                max_dist=4.0 * cfg.neighbor_radius,
-                ensemble=3,
+    if cfg.n_workers > 1 and len(unique_cl) > 1:
+        with Pool(
+            cfg.n_workers,
+            initializer=_incluster_worker_init,
+            initargs=(frechet, grid_coords, labels, cfg),
+        ) as pool:
+            for cl, est, n_cl in pool.imap_unordered(
+                _incluster_worker, unique_cl, chunksize=1
+            ):
+                results[cl] = est
+                if verbose:
+                    print(f"    cl {cl:3d} ({n_cl:4d} cells)  "
+                          f"a={est[0]:.3f}  b={est[1]:.3f}  "
+                          f"γ={np.degrees(est[2]):.1f}°",
+                          flush=True)
+    else:
+        for cl in unique_cl:
+            cl_out, est, n_cl = _incluster_estimate_one(
+                frechet, grid_coords, labels, cfg, cl
             )
-        except Exception:
-            est = np.array([1.0, 0.0, 0.0])
-
-        results[cl] = est
-        if verbose:
-            print(f"    cl {cl:3d} ({n_cl:4d} cells)  "
-                  f"a={est[0]:.3f}  b={est[1]:.3f}  "
-                  f"γ={np.degrees(est[2]):.1f}°")
+            results[cl_out] = est
+            if verbose:
+                print(f"    cl {cl_out:3d} ({n_cl:4d} cells)  "
+                      f"a={est[0]:.3f}  b={est[1]:.3f}  "
+                      f"γ={np.degrees(est[2]):.1f}°")
     return results
 
 
@@ -755,42 +972,82 @@ def run_cmip6_pipeline(
         print(f"  ν={cfg.df}, α={cfg.alpha}, ε={cfg.neighbor_radius}")
         print("=" * 60)
 
-    # Step 0: Ensure data
-    pr, times, lats, lons = load_monthly_precipitation(
-        cfg.data_dir,
-        year_start=cfg.year_start,
-        year_end=cfg.year_end,
-        verbose=verbose,
-    )
+    os.makedirs(cfg.output_dir, exist_ok=True)
+    checkpoint = _load_checkpoint(cfg, verbose=verbose)
 
-    # Step 1a: de-trend (vectorised moving-average approach)
-    pr_detrended = _detrend_grid_fast(
-        pr, period=cfg.stl_period, verbose=verbose,
-    )
+    if checkpoint is None:
+        # Step 0: Ensure data
+        pr, times, lats, lons = load_monthly_precipitation(
+            cfg.data_dir,
+            year_start=cfg.year_start,
+            year_end=cfg.year_end,
+            verbose=verbose,
+        )
 
-    # Step 1b: Annual maxima
-    annual_max, years = _monthly_annual_maxima(
-        pr_detrended, times, verbose=verbose,
-    )
+        # Step 1a: de-trend (vectorised moving-average approach)
+        pr_detrended = _detrend_grid_fast(
+            pr, period=cfg.stl_period, verbose=verbose,
+        )
+        del pr
+        gc.collect()
 
-    # Step 2: GEV → Fréchet
-    frechet, valid_idx = _compute_frechet_global(
-        annual_max, n_workers=cfg.n_workers, verbose=verbose,
-    )
-    n_lat, n_lon = annual_max.shape[1], annual_max.shape[2]
+        # Step 1b: Annual maxima
+        annual_max, years = _monthly_annual_maxima(
+            pr_detrended, times, verbose=verbose,
+        )
+        del pr_detrended
+        del times
+        gc.collect()
+
+        # Step 2: GEV → Fréchet
+        frechet, valid_idx = _compute_frechet_global(
+            annual_max, n_workers=cfg.n_workers, verbose=verbose,
+        )
+        n_lat, n_lon = annual_max.shape[1], annual_max.shape[2]
+        _write_checkpoint(
+            cfg,
+            "step2",
+            verbose=verbose,
+            lats=lats,
+            lons=lons,
+            years=years,
+            annual_max=annual_max,
+            frechet=frechet,
+            valid_idx=valid_idx,
+            n_lat=n_lat,
+            n_lon=n_lon,
+        )
+    else:
+        step2 = checkpoint["step2"]
+        lats = step2["lats"]
+        lons = step2["lons"]
+        years = step2["years"]
+        annual_max = step2["annual_max"]
+        frechet = step2["frechet"]
+        valid_idx = step2["valid_idx"]
+        n_lat = _npz_scalar(step2["n_lat"], int)
+        n_lon = _npz_scalar(step2["n_lon"], int)
 
     # Grid coordinates in grid-point units
     grid_coords = _grid_coords(valid_idx, n_lat, n_lon)
 
     # Step 3: Local MLE
-    est = _run_local_estimation_cmip6(
-        frechet, grid_coords, cfg, verbose=verbose,
-    )
+    if checkpoint is not None and checkpoint["stage"] in {"step3", "step4"}:
+        est = checkpoint["step3"]["estimates"]
+    else:
+        est = _run_local_estimation_cmip6(
+            frechet, grid_coords, cfg, verbose=verbose,
+        )
+        _write_checkpoint(cfg, "step3", verbose=verbose, estimates=est)
 
     # Step 4: Smoothing
-    sm = _smooth_estimates_cmip6(
-        est, grid_coords, cfg, verbose=verbose,
-    )
+    if checkpoint is not None and checkpoint["stage"] == "step4":
+        sm = checkpoint["step4"]["smoothed"]
+    else:
+        sm = _smooth_estimates_cmip6(
+            est, grid_coords, cfg, verbose=verbose,
+        )
+        _write_checkpoint(cfg, "step4", verbose=verbose, smoothed=sm)
 
     # Step 5: Clustering
     cl = _run_clustering_cmip6(sm, frechet, cfg, verbose=verbose)
@@ -816,8 +1073,7 @@ def run_cmip6_pipeline(
         print(f"  k_LEC = {cl['k_lec']}  (paper: 24)")
         print(f"  k_EDC = {cl['k_edc']}  (paper: 104)")
 
-    # Save intermediate results
-    os.makedirs(cfg.output_dir, exist_ok=True)
+    # Save final results
     save_path = os.path.join(cfg.output_dir, "pipeline_results.npz")
     np.savez_compressed(
         save_path,
@@ -833,6 +1089,9 @@ def run_cmip6_pipeline(
     )
     if verbose:
         print(f"  Saved results to {save_path}")
+
+    if cfg.cleanup_checkpoints_on_success:
+        _cleanup_checkpoints(cfg, verbose=verbose)
 
     return dict(
         lats=lats,

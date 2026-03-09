@@ -18,7 +18,12 @@ def test_hotpath_benchmark_runs_and_writes_markdown(tmp_path: Path):
 
     assert result["total_seconds"] > 0
     assert result["derived"]["n_valid_cells"] > 0
+    assert result["entrypoint"] == "weatherisk.cmip6_pipeline.run_cmip6_pipeline"
+    assert result["memory_profile"]["metric"] == "peak_process_tree_rss"
+    assert result["memory_profile"]["max_rss_bytes"] > 0
     assert output.exists()
     text = output.read_text(encoding="utf-8")
     assert "# Benchmark Results" in text
-    assert "step3_local_mle" in text
+    assert "run_cmip6_pipeline" in text
+    assert "_run_local_estimation_cmip6" in text
+    assert "Max memory" in text

@@ -2,7 +2,13 @@ import numpy as np
 import pytest
 from scipy.stats import t as t_dist
 
-from weatherisk.cmip6_pipeline import CMIP6Config, _compute_frechet_global, _edc_matrix_flat
+from weatherisk.cmip6_pipeline import (
+    CMIP6Config,
+    _compute_frechet_global,
+    _edc_matrix_flat,
+    _grid_coords,
+    _incluster_reestimate_cmip6,
+)
 from weatherisk.density import pairwise_density_summand
 
 
@@ -96,3 +102,33 @@ def test_edc_matrix_fast_matches_reference_loop():
     fast = _edc_matrix_flat(frechet)
     ref = _reference_edc_matrix_flat(frechet)
     np.testing.assert_allclose(fast, ref, rtol=0, atol=1e-12)
+
+
+def test_incluster_reestimate_parallel_matches_serial():
+    rng = np.random.default_rng(789)
+    frechet = rng.lognormal(mean=0.2, sigma=0.35, size=(18, 12))
+    valid_idx = np.arange(12)
+    grid_coords = _grid_coords(valid_idx, 3, 4)
+    labels = np.array([1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3])
+
+    cfg_serial = CMIP6Config(
+        neighbor_radius=3.0,
+        mle_ensemble=3,
+        n_workers=1,
+    )
+    cfg_parallel = CMIP6Config(
+        neighbor_radius=3.0,
+        mle_ensemble=3,
+        n_workers=2,
+    )
+
+    serial = _incluster_reestimate_cmip6(
+        frechet, grid_coords, labels, cfg_serial, "TEST", verbose=False
+    )
+    parallel = _incluster_reestimate_cmip6(
+        frechet, grid_coords, labels, cfg_parallel, "TEST", verbose=False
+    )
+
+    assert set(serial) == set(parallel)
+    for cl in serial:
+        np.testing.assert_allclose(serial[cl], parallel[cl], rtol=1e-10, atol=1e-10)

@@ -16,6 +16,7 @@ from weatherisk.covariance import cov_fkt_2d
 def calc_distance_ellipses(
     estimates: np.ndarray,
     res: int = 21,
+    chunk_size: int | None = None,
 ) -> np.ndarray:
     """Compute Jaccard-like ellipse overlap dissimilarity matrix.
 
@@ -32,6 +33,9 @@ def calc_distance_ellipses(
         Local estimates (a, b, g) per grid point.
     res : int
         Resolution of the rasterisation grid.
+    chunk_size : int, optional
+        Row-chunk size for the pairwise comparison loop. Smaller chunks use
+        less peak memory at the cost of additional loop overhead.
 
     Returns
     -------
@@ -72,7 +76,7 @@ def calc_distance_ellipses(
 
     # Compute dissimilarity matrix in chunks to limit memory
     dist_matrix = np.zeros((n, n))
-    chunk = min(256, n)
+    chunk = min(chunk_size or 256, n)
 
     for i_start in range(0, n, chunk):
         i_end = min(i_start + chunk, n)
@@ -159,8 +163,8 @@ def clustering(
 
     Parameters
     ----------
-    dist_matrix : ndarray, shape (n, n)
-        Symmetric dissimilarity matrix.
+    dist_matrix : ndarray, shape (n, n) or (n * (n - 1) / 2,)
+        Symmetric dissimilarity matrix or its condensed upper triangle.
     method : str
         Linkage method (default: 'average').
 
@@ -171,7 +175,10 @@ def clustering(
     """
     from scipy.spatial.distance import squareform
 
-    condensed = squareform(dist_matrix)
+    if dist_matrix.ndim == 1:
+        condensed = dist_matrix
+    else:
+        condensed = squareform(dist_matrix, checks=False)
     return linkage(condensed, method=method)
 
 
@@ -212,8 +219,8 @@ def quantile_threshold(
 
     Parameters
     ----------
-    dist_matrix : ndarray, shape (n, n)
-        Symmetric dissimilarity matrix.
+    dist_matrix : ndarray, shape (n, n) or (n * (n - 1) / 2,)
+        Symmetric dissimilarity matrix or its condensed upper triangle.
     quantile : float
         Quantile in [0, 1] (default 0.30 = 30th percentile).
 
@@ -222,6 +229,9 @@ def quantile_threshold(
     float
         The threshold value.
     """
+    if dist_matrix.ndim == 1:
+        return float(np.percentile(dist_matrix, quantile * 100))
+
     n = dist_matrix.shape[0]
     upper_tri = dist_matrix[np.triu_indices(n, k=1)]
     return float(np.percentile(upper_tri, quantile * 100))
