@@ -67,6 +67,9 @@ methodology. Cross-validated against R output to 1e-10 tolerance
 - Rank-based madogram → extremal coefficients → dissimilarity D₁
 - Same clustering + threshold method → k=18
 
+Implementation note: the current Python code uses SciPy average linkage
+via `weatherisk.clustering.clustering()`, not Ward linkage.
+
 **Assessment**: Implementation verified against R reference data
 (cluster counts match, merge heights match, assignments equivalent).
 The 30%-quantile threshold is exactly the Justus (2025) method.
@@ -116,6 +119,21 @@ where Z_t(s) is the Fréchet-transformed block maximum at cell s, time t.
 
 6-panel figure: LEC clusters, EDC clusters, parameter a, parameter b,
 LEC ES₉₅, EDC ES₉₅.
+
+## Current Code Mapping
+
+For the implemented CPC maps pipeline, the corresponding internal
+functions are:
+
+- Step 1: `weatherisk.cpc_pipeline._load_subregion`
+- Step 2: `weatherisk.cpc_pipeline._compute_frechet`
+- Step 3: `weatherisk.cpc_pipeline._run_local_estimation`
+- Step 4: `weatherisk.cpc_pipeline._smooth_estimates`
+- Step 5: `weatherisk.cpc_pipeline._run_clustering`
+- Step 6: `weatherisk.cpc_pipeline._incluster_reestimate`
+- Step 7: `weatherisk.cpc_pipeline._cluster_risk`
+- Step 8: optional GDP weighting inside `weatherisk.cpc_pipeline.run_cpc_pipeline`
+- Plot generation: `weatherisk.cpc_pipeline.generate_maps`
 
 ---
 
@@ -253,7 +271,7 @@ honest and still very useful for risk prioritisation.
 3. **Risk units are an index**: See interpretation section above.
 
 4. **No spatial contiguity in clustering**: The LEC/EDC clustering uses
-   Ward's linkage on the dissimilarity matrix without spatial contiguity
+  average linkage on the dissimilarity matrix without spatial contiguity
    constraints.  Some clusters may contain geographically disconnected
    cells (visible in `lec_clusters_map.png`).  This is methodologically
    consistent with Justus (2025) but worth discussing.

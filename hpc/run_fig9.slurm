@@ -71,7 +71,8 @@ python3 scripts/reproduce_fig9.py \
     --data-dir /albedo/pool/CMIP6/data/CMIP/AWI/AWI-ESM-1-1-LR/historical/r1i1p1f1/Amon/pr/gn/v20200212 \
     --workers ${SLURM_CPUS_PER_TASK} \
     --output-dir output/cmip6_fig9 \
-    --dpi 300
+    --dpi 300 \
+    "$@"
 
 echo ""
 echo "============================================"

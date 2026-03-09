@@ -52,29 +52,44 @@ weatherisk validate --resolution 10 --n-sim 20 --seed 42
 
 ---
 
+## Command Status
+
+The current CLI has five subcommands, but they are not all at the same maturity level.
+
+| Command | Status | Actual entrypoint | Notes |
+|--------|--------|-------------------|-------|
+| `weatherisk validate` | Implemented | `weatherisk.pipeline.run_pipeline` | Lightweight synthetic sanity check |
+| `weatherisk maps` | Implemented | `weatherisk.cpc_pipeline.run_cpc_pipeline` | Main CPC real-data pipeline with risk maps |
+| `weatherisk cmip6` | Implemented | `weatherisk.cmip6_pipeline.run_cmip6_pipeline` | Figure 9 reproduction path |
+| `weatherisk risk-pipeline` | Implemented | `weatherisk.risk_pipeline` helpers | Post-process precomputed risk CSVs |
+| `weatherisk risk` | Placeholder | `weatherisk.cli.risk` | Accepts arguments but exits with “Not yet implemented for real data” |
+
+## Documentation Guide
+
+- `docs/code_execution_flow.md`: function-level execution flow for each implemented pipeline
+- `docs/pipeline_bottleneck_analysis.md`: current bottlenecks, split by CMIP6 and CPC paths
+- `docs/methodology_notes.md`: methodological interpretation notes for the CPC maps pipeline
+- `docs/benchmark_results.md`: benchmark evidence for the optimized CMIP6 Figure 9 path
+
 ## Pipeline Flows
 
-### Flow 1: Method Validation (`weatherisk validate`)
+### Flow 1: Lightweight Validation (`weatherisk validate`)
 
-Reproduces the clustering method on **synthetic data** to verify correctness.
+`weatherisk validate` is a lightweight synthetic sanity check. It does not run the full paper-style local-MLE pipeline.
 
 ```
-Parameter preset  →  Simulate max-stable process
-  →  Local parameter estimation (pairwise composite likelihood)
-  →  Spatial smoothing of estimates
-  →  Ellipse-shape dissimilarity matrix
-  →  Hierarchical agglomerative clustering
-  →  In-cluster re-estimation
-  →  Comparison plots
+Parameter preset
+  →  Simulate stationary max-stable field
+  →  Inject small noise around known (a, b, γ)
+  →  Ellipse-overlap dissimilarity matrix
+  →  Average-linkage clustering
+  →  Save clusters / estimates
 ```
 
 **Usage:**
 
 ```bash
-# Using a named parameter preset (stripes, bigsmall, rotate)
 weatherisk validate --params stripes --resolution 10 --n-sim 20 --seed 42
-
-# Custom output directory
 weatherisk validate --output-dir output/validate
 ```
 
@@ -92,80 +107,111 @@ result = run_pipeline(
     alpha=p.alpha,
     seed=42,
 )
-clusters = result["clusters"]   # 1-D array, one label per grid cell
-linkage  = result["linkage"]    # scipy linkage matrix for dendrograms
+clusters = result["clusters"]
+linkage = result["linkage"]
 ```
 
-**Grid sizes:** 10–51 points per axis (100–2 601 cells). Runs in minutes on a laptop.
+For the full synthetic methodology from the paper, use `run_nonstationary_pipeline` from Python instead of `weatherisk validate`.
 
----
+### Flow 2: Full Synthetic Study (`run_nonstationary_pipeline`)
 
-### Flow 2: Real-Data Risk Analysis (`weatherisk risk`)
-
-Applies the method to observed climate data (CPC, ERA5, CMIP6) and computes risk metrics.
+This is the paper-style synthetic workflow used to reproduce the non-stationary simulation study.
 
 ```
-NetCDF climate data
-  →  Extract block maxima (annual/seasonal)
-  →  Fit GEV marginals per grid cell
-  →  Transform to unit Fréchet margins
-  →  Local pairwise MLE of (a, b, γ)        [embarrassingly parallel]
+Preset parameter fields a(x, y), b(x, y), γ(x, y)
+  →  Simulate non-stationary max-stable process
+  →  Local MLE at each grid cell
   →  Spatial smoothing
-  →  Scalable clustering (coarse-grid proxy)
+  →  LEC clustering (D₂)
+  →  EDC clustering (D₁)
   →  In-cluster re-estimation
-  →  Compute VaR / ES per cluster
-  →  Produce cluster map, risk choropleth, bar charts
+```
+
+**Python API:**
+
+```python
+from weatherisk.pipeline import run_nonstationary_pipeline
+
+result = run_nonstationary_pipeline(
+    preset="paper_stripes",
+    resolution=51,
+    n_sim=100,
+    n_workers=4,
+)
+```
+
+### Flow 3: CPC Real-Data Maps (`weatherisk maps`)
+
+This is the main real-data risk-analysis pipeline currently implemented in the package.
+
+```
+CPC daily NetCDF files
+  →  Sub-region selection and coarsening
+  →  Annual block maxima
+  →  GEV fit per retained cell
+  →  Unit-Fréchet transform
+  →  Local pairwise CL MLE of (a, b, γ)
+  →  Spatial smoothing
+  →  LEC clustering (ellipse overlap D₂)
+  →  EDC clustering (madogram D₁)
+  →  In-cluster re-estimation
+  →  Cluster-level VaR / ES on the Fréchet scale
+  →  Optional GDP-weighted cell-level risk
+  →  Cartopy map generation
 ```
 
 **Usage:**
 
 ```bash
-weatherisk risk --netcdf data/cpc_tmax.nc --hazard heat -k 25 --workers 8
+weatherisk maps --variable precip --gdp-path data/gdp/GDP_PPP_1990_2015_5arcmin_v2.nc
+weatherisk maps --variable tmax --file-prefix tmax
+weatherisk maps --variable precip --lat-range 30 65 --lon-range 5 55 --coarsen 4
 ```
 
-**Python API (step by step):**
+**Output:** 11 PNG maps in `docs/figures/`, including cluster maps, parameter fields, ES maps, GDP exposure, and GDP-weighted risk maps.
 
-```python
-import numpy as np
-from weatherisk.netcdf import load_climate_data
-from weatherisk.extremes import block_maxima, fit_gev, to_frechet
-from weatherisk.grid import Grid
-from weatherisk.density import pairwise_density_optim_local
-from weatherisk.estimation import smooth_local_estimates
-from weatherisk.clustering import calc_distance_ellipses, clustering
-from weatherisk.risk import compute_var, compute_es
+### Flow 4: CMIP6 Figure 9 Reproduction (`weatherisk cmip6`)
 
-# 1. Load climate data
-ds = load_climate_data("data/cpc_tmax.nc", variable="tmax")
+This is the dedicated AWI-ESM-1-1-LR Figure 9 pipeline.
 
-# 2. Extreme value analysis per grid cell
-bm = block_maxima(daily_series, block_size=365)
-loc, scale, shape = fit_gev(bm)
-frechet = to_frechet(bm, loc, scale, shape)
-
-# 3. Local estimation (parallelisable)
-estimates = pairwise_density_optim_local(
-    sim_data=frechet, df=5.0, alpha=1.0,
-    x=0, y=0, grid=grid, neighbourhood=3,
-)
-
-# 4. Smooth and cluster
-smoothed = smooth_local_estimates(estimates, smoothing_dist=2, grid=grid)
-D = calc_distance_ellipses(smoothed, res=grid.resolution)
-hc = clustering(D, method="average")
-
-# 5. Risk metrics
-var_95 = compute_var(cluster_data, p=0.95)
-es_95  = compute_es(cluster_data, p=0.95)
+```
+Monthly CMIP6 precipitation
+  →  Vectorized de-trending
+  →  Annual maxima of monthly data
+  →  GEV fit per valid grid cell
+  →  Unit-Fréchet transform
+  →  Local MLE in grid-point distance units
+  →  Spatial smoothing
+  →  LEC / EDC clustering
+  →  In-cluster re-estimation
+  →  Save pipeline_results.npz
+  →  Plot Figure 9 maps
 ```
 
-**Grid sizes:** up to 360 × 720 = 259 200 cells (0.5° global). Uses the coarse-grid proxy strategy for scalable clustering (see below).
+The CMIP6 path also supports checkpoint-and-resume for Steps 2–4 through `output/cmip6_fig9/checkpoints/`.
 
----
+**Usage:**
 
-### Flow 3: Risk Pipeline (`weatherisk risk-pipeline`)
+```bash
+weatherisk cmip6
+weatherisk cmip6 --workers 16
+weatherisk cmip6 --data-dir /pool/data/CMIP6/.../pr/gn/
+```
 
-Lightweight post-processing of **pre-computed risk maps**. Takes a CSV with lat/lon/VaR/ES columns, smooths the fields, creates contiguous risk regions via quantile banding + connected components, and computes per-region statistics.
+### Flow 5: Risk-Map Post-Processing (`weatherisk risk-pipeline`)
+
+This path does not fit max-stable models. It post-processes an already computed risk grid.
+
+```
+CSV with lat / lon / VaR_95 / ES_95
+  →  Reshape to 2-D grid
+  →  Gaussian smoothing
+  →  Quantile banding
+  →  Connected-component labeling
+  →  Merge tiny regions
+  →  Sequential relabeling
+  →  Per-region summary statistics
+```
 
 **Usage:**
 
@@ -173,86 +219,9 @@ Lightweight post-processing of **pre-computed risk maps**. Takes a CSV with lat/
 weatherisk risk-pipeline --csv data/risk_map_grid.csv --bands 6 --sigma 0.8
 ```
 
-**Python API:**
+## Library-Only Scalable Helpers
 
-```python
-from weatherisk.risk_pipeline import (
-    load_and_grid, smooth_field, quantile_bands,
-    connected_patches, merge_tiny_regions,
-    remap_ids_to_sequential, compute_cluster_stats,
-)
-
-data = load_and_grid("data/risk_map_grid.csv")
-ES_s = smooth_field(data["ES"], sigma=0.8, land_mask=data["land_mask"])
-bands, thresholds = quantile_bands(ES_s, n_bands=6)
-clusters = connected_patches(bands, min_patch=30)
-clusters = merge_tiny_regions(clusters, data["lon_grid"], data["lat_grid"])
-clusters, K = remap_ids_to_sequential(clusters)
-stats = compute_cluster_stats(clusters_df, data["df"])
-```
-
----
-
-### Flow 4: CPC Maps (`weatherisk maps`)
-
-The primary pipeline for real-data analysis. Loads NOAA CPC daily NetCDF files (precipitation or temperature), computes annual block maxima, fits GEV marginals, transforms to unit Fréchet, estimates local anisotropy parameters, runs LEC and EDC clustering, and outputs filled-region Cartopy maps.
-
-Optionally weights risk by GDP exposure using the Kummu et al. (2018) gridded GDP PPP dataset.
-
-```
-CPC daily NetCDF files (20 years)
-  →  Sub-region selection & coarsening (~2° grid)
-  →  Annual block maxima → GEV fit → Fréchet transform
-  →  Local pairwise composite-likelihood MLE of (a, b, γ)
-  →  Spatial smoothing
-  →  LEC clustering (ellipse-overlap D₂) + EDC clustering (madogram D₁)
-  →  30%-quantile threshold on dissimilarity matrix → k clusters
-  →  In-cluster re-estimation
-  →  Tail-risk: ES₉₅ of Fréchet spatial block max per cluster
-  →  [Optional] GDP exposure × ES₉₅ per cell
-  →  Filled-region Cartopy maps (PNG)
-```
-
-**Usage:**
-
-```bash
-# Precipitation with GDP exposure weighting
-weatherisk maps --variable precip --gdp-path data/gdp/GDP_PPP_1990_2015_5arcmin_v2.nc
-
-# Temperature without GDP
-weatherisk maps --variable tmax --file-prefix tmax
-
-# Custom region and resolution
-weatherisk maps --variable precip --lat-range 30 65 --lon-range 5 55 --coarsen 4
-```
-
-**Output:** 11 PNG maps in `docs/figures/` including cluster maps, parameter fields, tail-risk intensity (ES₉₅), GDP exposure, and exposure-weighted risk.
-
-**Performance:** ~100 seconds on Apple M2 (16 GB RAM) for 384 land cells × 20 years.
-
----
-
-## Scalable Clustering Strategy
-
-The full dissimilarity matrix for a 0.5° global grid (259K cells) requires ~500 GB.
-`weatherisk` provides a **coarse-grid proxy** approach:
-
-1. Estimate (a, b, γ) at full resolution (embarrassingly parallel).
-2. Downsample estimates to ~2° (16 200 cells) via `downsample_estimates()`.
-3. Compute the full dissimilarity matrix at coarse resolution (fits in memory).
-4. Hierarchical clustering on the coarse grid → *k* clusters.
-5. Propagate labels to fine grid via `propagate_cluster_labels()`.
-6. Re-estimate parameters within each cluster.
-
-```python
-from weatherisk.scalable import downsample_estimates, propagate_cluster_labels
-
-coarse_est = downsample_estimates(fine_estimates, fine_shape=(360, 720), coarse_shape=(90, 180))
-# ... cluster on coarse_est ...
-fine_labels = propagate_cluster_labels(coarse_labels, coarse_shape=(90, 180), fine_shape=(360, 720))
-```
-
-For HPC, local estimation can be distributed across SLURM job arrays using `chunk_indices()`, `save_chunk()`, and `load_chunk()`.
+`weatherisk.scalable` contains coarse-grid proxy helpers such as `downsample_estimates()` and `propagate_cluster_labels()`. These are available for experimentation, but the current CLI pipelines do not call them by default.
 
 ---
 
@@ -269,15 +238,15 @@ For HPC, local estimation can be distributed across SLURM job arrays using `chun
 | `extremes` | Block-maxima extraction, GEV fitting, Fréchet transform |
 | `risk` | VaR, ES, per-cluster risk aggregation |
 | `risk_pipeline` | Risk-map loading, quantile banding, connected-component clustering, region statistics |
-| `cpc_pipeline` | End-to-end CPC real-data pipeline: load NetCDF → GEV → Fréchet → LEC/EDC clustering → risk → Cartopy maps |
+| `cpc_pipeline` | End-to-end CPC real-data pipeline: load CPC files → GEV → Fréchet → LEC/EDC clustering → risk → Cartopy maps |
 | `map_plotting` | Filled-region Cartopy maps (pcolormesh): cluster maps, parameter fields, risk choropleths, summary panels |
 | `gdp` | Gridded GDP exposure loading (Kummu et al. 2018), regridding to pipeline grid, cell-level extraction |
 | `netcdf` | NetCDF climate data ingestion (CPC, ERA5), longitude wrapping |
-| `scalable` | Coarse-grid proxy clustering, chunked parallel estimation, checkpoint/resume |
+| `scalable` | Library-only helpers for coarse-grid proxy clustering and label propagation |
 | `parameters` | Named parameter presets (`stripes`, `bigsmall`, `rotate`) as dataclasses |
 | `plotting` | Heatmaps, cluster maps, dendrograms, choropleth, bar charts (synthetic data) |
-| `pipeline` | End-to-end orchestration for synthetic validation (`run_pipeline`) |
-| `cli` | Click-based CLI entry point with four subcommands |
+| `pipeline` | Synthetic orchestration: lightweight validation (`run_pipeline`) and full non-stationary study (`run_nonstationary_pipeline`) |
+| `cli` | Click-based CLI entry point with `validate`, `maps`, `cmip6`, `risk-pipeline`, and placeholder `risk` |
 | `io` | CSV, NumPy, and RDS I/O helpers |
 
 ## Parameter Presets
