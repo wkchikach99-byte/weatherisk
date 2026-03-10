@@ -88,15 +88,15 @@ These define the Figure 9 scientific path and must be ported first.
 These helpers control indexing and array construction and therefore also need exact matching if used by Tier 1 functions.
 
 1. `dist_x`
-  passes: true
+  passes: false
 2. `dist_y`
-  passes: true
+  passes: false
 3. `grid_number`
-  passes: true
+  passes: false
 4. `number_grid`
-  passes: true
+  passes: false
 5. `koord_num`
-  passes: true
+  passes: false
 6. `crop_matrix`
   passes: false
 7. `crop_local_estimates`
@@ -128,18 +128,69 @@ For each Tier 1 and Tier 2 R function, define:
 
 The default rule is exact output parity. If exact parity is impossible because the function is an optimizer wrapper, then the full decision contract must still match exactly: starts, retries, branch selection, and selected output.
 
+Authoritative equivalence tests belong in Rust, not only in Python. The canonical conformance check for a migrated function is:
+
+1. frozen R outputs stored under `tests/reference_data/`,
+2. Rust fixture tests in the crate reading those frozen R outputs directly,
+3. optional Python tests for bindings, routing, and end-to-end orchestration.
+
+Python tests are still required where bindings or pipeline routing are part of the migration step, but they are secondary evidence. A function is not scientifically accepted if its only R-equivalence test lives in Python.
+
 ## Per-Function Acceptance Criteria
 
 The following acceptance criteria apply to each function before its `passes` flag may be changed to `true`.
 
-1. A Rust equivalent exists and is reachable from the crate API.
-2. R-generated fixtures exist for nominal and edge cases relevant to that function.
-3. Rust conformance tests pass against the R fixtures.
-4. Python binding tests pass if the function is exposed through PyO3.
-5. The Python code path calls the Rust implementation where that migration step requires it.
-6. Documentation is updated for the migrated function and any parity-mode caveats.
-7. The relevant test subset is green before and after the step.
-8. The step is committed as one atomic change.
+Status booleans in the tracking matrix below are methodology-scoped:
+
+- `true` means the criterion is satisfied under the current migration methodology and explicitly verified.
+- `false` means it is not yet satisfied, or it has only legacy/partial coverage that does not yet count for strict acceptance.
+
+Use the short IDs `A1` through `A8` consistently when updating the matrix.
+
+1. `A1` A Rust equivalent exists and is reachable from the crate API.
+2. `A2` R-generated fixtures exist for nominal and edge cases relevant to that function.
+3. `A3` Rust conformance tests pass against the R fixtures.
+4. `A4` Python binding tests pass if the function is exposed through PyO3.
+5. `A5` The Python code path calls the Rust implementation where that migration step requires it.
+6. `A6` Documentation is updated for the migrated function and any parity-mode caveats.
+7. `A7` The relevant test subset is green before and after the step.
+8. `A8` The step is committed as one atomic change.
+
+`overall_passes: true` is allowed only if all of `A1` through `A8` are `true`.
+
+## Acceptance Tracking Matrix
+
+Legend:
+
+- `A1` Rust equivalent exists
+- `A2` R fixtures exist
+- `A3` Rust tests from frozen R outputs pass
+- `A4` Python binding tests pass
+- `A5` Python path routed to Rust
+- `A6` Documentation updated
+- `A7` Relevant subset green
+- `A8` Atomic step committed
+
+| Function | A1 | A2 | A3 | A4 | A5 | A6 | A7 | A8 | overall_passes | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `cov_fkt_2d` | true | true | false | false | false | false | false | false | false | Rust scalar implementation exists; strict Rust-vs-R fixture test still missing. |
+| `pairwise_density_summand` | true | true | false | false | false | false | false | false | false | Vector binding exists; current strict acceptance still blocked on Rust-side R-fixture conformance. |
+| `pairwise_density_optim_local` | true | false | false | false | false | false | false | false | false | Existing optimizer is not yet accepted as the R-conformance implementation. |
+| `smooth_local_estimates` | false | false | false | false | false | false | false | false | false | Not yet migrated into Rust. |
+| `calc_distance_ellipses` | true | true | false | false | false | false | false | false | false | Rust implementation exists, but parity mode and strict Rust-vs-R fixture acceptance are not finalized. |
+| `clustering` | false | false | false | false | false | false | false | false | false | Rust equivalent not yet implemented. |
+| `cluster_number_threshold_method` | false | false | false | false | false | false | false | false | false | Rust equivalent not yet implemented. |
+| `llh_in_cluster` | false | false | false | false | false | false | false | false | false | Rust equivalent not yet implemented. |
+| `calc_estimates_in_clusters` | false | false | false | false | false | false | false | false | false | Rust equivalent not yet implemented. |
+| `dist_x` | true | true | true | true | true | true | true | true | true | Helper unit accepted: Rust fixture tests are authoritative; Python tests cover binding and routing. |
+| `dist_y` | true | true | true | true | true | true | true | true | true | Helper unit accepted: Rust fixture tests are authoritative; Python tests cover binding and routing. |
+| `grid_number` | true | true | true | true | true | true | true | true | true | Helper unit accepted: Rust fixture tests are authoritative; Python tests cover binding and routing. |
+| `number_grid` | true | true | true | true | true | true | true | true | true | Helper unit accepted: Rust fixture tests are authoritative; Python tests cover binding and routing. |
+| `koord_num` | true | true | true | true | true | true | true | true | true | Helper unit accepted: Rust fixture tests are authoritative; Python tests cover binding and routing. |
+| `crop_matrix` | false | false | false | false | false | false | false | false | false | Not yet migrated into Rust. |
+| `crop_local_estimates` | false | false | false | false | false | false | false | false | false | Not yet migrated into Rust. |
+| `cov_to_ec` | false | true | false | false | false | false | false | false | false | R fixtures already exist; Rust implementation does not yet exist. |
+| `ec_to_cov` | false | true | false | false | false | false | false | false | false | R fixtures already exist; Rust implementation does not yet exist. |
 
 ## Function Mapping Table
 
@@ -180,7 +231,12 @@ passes: false
 ### Phase 2: Migrate helper and indexing functions
 passes: false
 
-Completed in this phase so far:
+Accepted in this phase so far:
+
+1. frozen R fixtures exist for the helper group,
+2. authoritative Rust-vs-R fixture tests now live in the Rust crate,
+3. Python binding and routing checks are green,
+4. the helper acceptance step has been committed cleanly.
 
 1. `dist_x`
 2. `dist_y`
@@ -220,8 +276,8 @@ passes: false
 
 ### Test Layout
 
-- Rust unit tests: function-level fixture checks.
-- Python integration tests: binding correctness and end-to-end mini-pipeline checks.
+- Rust unit tests: authoritative function-level fixture checks against frozen R outputs.
+- Python integration tests: binding correctness, routing correctness, and end-to-end mini-pipeline checks.
 - R fixture generator tests: ensure fixtures are reproducible and versioned.
 
 ## Optimizer Plan

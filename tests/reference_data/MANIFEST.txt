@@ -33,6 +33,7 @@ hclust_saunders_order.csv  —  EDC hierarchical clustering: leaf order
 clusters_saunders.csv  —  Saunders/EDC cluster assignments (k=12, threshold=q30)
 saunders_clustering_params.csv  —  Saunders clustering parameters: k and q30 threshold
 llh_in_clusters_lec.csv  —  Log-likelihood per LEC cluster using mean smoothed estimates
+dist_helper_test_cases.csv  —  dist_x(x1,x2) and dist_y(y1,y2) helper results
 grid_number_test_cases.csv  —  grid_number(i,j) results for verification (R 1-based)
 number_grid_test_cases.csv  —  number_grid(n) results for verification (R 1-based)
 koord_num_test_cases.csv  —  koord_num(x,y) nearest-grid-point results (R 1-based index)

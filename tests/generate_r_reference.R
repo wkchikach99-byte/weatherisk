@@ -443,6 +443,18 @@ save_csv(llh_lec_results, "llh_in_clusters_lec",
 # ── 15.  Summary ──────────────────────────────────────────────────────────
 cat("\n[Step 15] Summary\n")
 
+# dist_x / dist_y helper test cases
+dist_tests <- data.frame(
+  x1 = c(-5.0, 0.0, 3.5, -1.25, 8.0),
+  x2 = c(2.0, 0.0, 1.25, 4.75, -3.0),
+  y1 = c(5.0, -3.0, 0.5, 2.25, -7.5),
+  y2 = c(-1.0, 1.25, 0.5, -4.75, 2.5)
+)
+dist_tests$dist_x <- mapply(dist_x, dist_tests$x1, dist_tests$x2)
+dist_tests$dist_y <- mapply(dist_y, dist_tests$y1, dist_tests$y2)
+save_csv(dist_tests, "dist_helper_test_cases",
+         "dist_x(x1,x2) and dist_y(y1,y2) helper results")
+
 # grid_number / number_grid test cases
 coord_tests <- data.frame(
   i = c(1, 5, 10, 3, 7),

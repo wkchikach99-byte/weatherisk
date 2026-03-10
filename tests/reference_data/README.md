@@ -24,6 +24,7 @@ write.csv(as.data.frame(as.table(a_sim)), "simulation_10x10_seed42.csv", row.nam
 | `local_estimates_10x10.csv` | Local parameter estimates (a, b, γ) per grid cell | `c2_locest_calc.R` + `c3_locest_merge.R` |
 | `clusters_locest_10x10.csv` | Cluster labels from ellipse-based method | `c4_locest_clust.R` |
 | `clusters_saunders_10x10.csv` | Cluster labels from Saunders madogram method | `c5_saunders_clust.R` |
+| `dist_helper_test_cases.csv` | Frozen `dist_x` / `dist_y` helper outputs from R | `tests/generate_r_reference.R` |
 
 ## Tolerance
 

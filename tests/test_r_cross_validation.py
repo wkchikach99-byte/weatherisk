@@ -76,6 +76,14 @@ class TestGridCoordinates:
             assert abs(px - row["X"]) < 1e-10
             assert abs(py - row["Y"]) < 1e-10
 
+    def test_dist_helpers_match_r(self):
+        from weatherisk.grid import dist_x, dist_y
+
+        ref = pd.read_csv(REF / "dist_helper_test_cases.csv")
+        for _, row in ref.iterrows():
+            np.testing.assert_allclose(dist_x(row["x1"], row["x2"]), row["dist_x"], atol=1e-14)
+            np.testing.assert_allclose(dist_y(row["y1"], row["y2"]), row["dist_y"], atol=1e-14)
+
     def test_grid_number_matches_r(self):
         """grid_number / number_grid round-trip (accounting for 0/1-based)."""
         ref = pd.read_csv(REF / "grid_number_test_cases.csv")

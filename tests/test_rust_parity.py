@@ -20,7 +20,10 @@ discrepancy is understood and resolved.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
 import pytest
 
 # ── Availability check ────────────────────────────────────────────────────
@@ -33,6 +36,8 @@ except ImportError:
     HAS_RUST = False
 
 pytestmark = pytest.mark.skipif(not HAS_RUST, reason="weatherisk_core not built")
+
+REF = Path(__file__).parent / "reference_data"
 
 
 class TestGridHelperParity:
@@ -62,6 +67,41 @@ class TestGridHelperParity:
         points = [(0.0, 0.0), (-1.8, 1.7), (1.6, -1.4)]
         for x, y in points:
             assert _rc.koord_num(x, y, grid.x_ax, grid.y_ax) == grid.koord_num(x, y)
+
+
+class TestGridHelperRFixtures:
+    """Grid helper bindings: Rust vs frozen R fixtures."""
+
+    def test_dist_helpers(self):
+        ref = pd.read_csv(REF / "dist_helper_test_cases.csv")
+
+        for _, row in ref.iterrows():
+            assert _rc.dist_x(row["x1"], row["x2"]) == pytest.approx(row["dist_x"], abs=1e-14)
+            assert _rc.dist_y(row["y1"], row["y2"]) == pytest.approx(row["dist_y"], abs=1e-14)
+
+    def test_grid_number(self):
+        ref = pd.read_csv(REF / "grid_number_test_cases.csv")
+
+        for _, row in ref.iterrows():
+            rs_n = _rc.grid_number(int(row["i"]) - 1, int(row["j"]) - 1, 10, 10)
+            assert rs_n == int(row["grid_num"]) - 1
+
+    def test_number_grid(self):
+        ref = pd.read_csv(REF / "number_grid_test_cases.csv")
+
+        for _, row in ref.iterrows():
+            rs_i, rs_j = _rc.number_grid(int(row["n"]) - 1, 10, 10)
+            assert rs_i == int(row["i"]) - 1
+            assert rs_j == int(row["j"]) - 1
+
+    def test_koord_num(self):
+        ref_x = pd.read_csv(REF / "x_axis.csv")["x_ax"].to_numpy(dtype=float)
+        ref_y = pd.read_csv(REF / "y_axis.csv")["y_ax"].to_numpy(dtype=float)
+        ref = pd.read_csv(REF / "koord_num_test_cases.csv")
+
+        for _, row in ref.iterrows():
+            rs_n = _rc.koord_num(row["x"], row["y"], ref_x, ref_y)
+            assert rs_n == int(row["grid_num"]) - 1
 
 
 # ── Shared test fixtures ─────────────────────────────────────────────────
