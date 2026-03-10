@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from weatherisk.grid import Grid
+from weatherisk.grid import Grid, dist_x, dist_y
 
 
 class TestGridCreation:
@@ -54,3 +54,7 @@ class TestHelpers:
 
         np.testing.assert_allclose(rad(180), np.pi)
         np.testing.assert_allclose(deg(np.pi), 180)
+
+    def test_dist_helpers(self):
+        assert dist_x(3.5, 1.25) == pytest.approx(2.25)
+        assert dist_y(-1.0, 2.5) == pytest.approx(-3.5)

@@ -10,12 +10,54 @@
 /// - `optimize_pairwise_density`: full optimizer loop (global MLE)
 /// - `optimize_local_mle`: full optimizer loop (local MLE)
 mod density;
+mod grid;
 mod lec;
 mod optimizer;
 
 use numpy::ndarray::Array1;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
+use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
+
+#[pyfunction]
+fn dist_x(x1: f64, x2: f64) -> f64 {
+    grid::dist_x(x1, x2)
+}
+
+#[pyfunction]
+fn dist_y(y1: f64, y2: f64) -> f64 {
+    grid::dist_y(y1, y2)
+}
+
+#[pyfunction]
+fn grid_number(i: usize, j: usize, nrow: usize, ncol: usize) -> PyResult<usize> {
+    grid::grid_number(i, j, nrow, ncol).ok_or_else(|| {
+        PyIndexError::new_err(format!(
+            "Index ({i}, {j}) out of bounds for grid {nrow}x{ncol}"
+        ))
+    })
+}
+
+#[pyfunction]
+fn number_grid(n: usize, nrow: usize, ncol: usize) -> PyResult<(usize, usize)> {
+    grid::number_grid(n, nrow, ncol).ok_or_else(|| {
+        PyIndexError::new_err(format!(
+            "Index {n} out of bounds for grid size {}",
+            nrow * ncol
+        ))
+    })
+}
+
+#[pyfunction]
+fn koord_num(
+    x: f64,
+    y: f64,
+    x_ax: PyReadonlyArray1<f64>,
+    y_ax: PyReadonlyArray1<f64>,
+) -> PyResult<usize> {
+    grid::koord_num(x, y, x_ax.as_slice().unwrap(), y_ax.as_slice().unwrap())
+        .ok_or_else(|| PyIndexError::new_err("Cannot locate coordinate on empty grid"))
+}
 
 /// Scalar covariance function (for parity testing).
 #[pyfunction]
@@ -131,6 +173,11 @@ fn calc_distance_ellipses_condensed<'py>(
 /// The Python module definition.
 #[pymodule]
 fn weatherisk_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(dist_x, m)?)?;
+    m.add_function(wrap_pyfunction!(dist_y, m)?)?;
+    m.add_function(wrap_pyfunction!(grid_number, m)?)?;
+    m.add_function(wrap_pyfunction!(number_grid, m)?)?;
+    m.add_function(wrap_pyfunction!(koord_num, m)?)?;
     m.add_function(wrap_pyfunction!(cov_fkt_2d_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(neg_log_likelihood_sum, m)?)?;
     m.add_function(wrap_pyfunction!(nll_with_gradient_py, m)?)?;

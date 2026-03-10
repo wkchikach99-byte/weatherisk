@@ -35,6 +35,35 @@ except ImportError:
 pytestmark = pytest.mark.skipif(not HAS_RUST, reason="weatherisk_core not built")
 
 
+class TestGridHelperParity:
+    """Grid helper bindings: Python vs Rust."""
+
+    def test_dist_helpers(self):
+        from weatherisk.grid import dist_x as py_dist_x, dist_y as py_dist_y
+
+        assert _rc.dist_x(2.5, 1.0) == pytest.approx(py_dist_x(2.5, 1.0), abs=1e-14)
+        assert _rc.dist_y(-3.0, 1.25) == pytest.approx(py_dist_y(-3.0, 1.25), abs=1e-14)
+
+    def test_grid_number_and_inverse(self):
+        from weatherisk.grid import Grid
+
+        grid = Grid(x_range=(-2, 2), y_range=(-2, 2), resolution=5)
+        for n in range(grid.n_grid):
+            i, j = grid.number_grid(n)
+            rs_n = _rc.grid_number(i, j, grid.nrow, grid.ncol)
+            rs_i, rs_j = _rc.number_grid(n, grid.nrow, grid.ncol)
+            assert rs_n == n
+            assert (rs_i, rs_j) == (i, j)
+
+    def test_koord_num(self):
+        from weatherisk.grid import Grid
+
+        grid = Grid(x_range=(-2, 2), y_range=(-2, 2), resolution=5)
+        points = [(0.0, 0.0), (-1.8, 1.7), (1.6, -1.4)]
+        for x, y in points:
+            assert _rc.koord_num(x, y, grid.x_ax, grid.y_ax) == grid.koord_num(x, y)
+
+
 # ── Shared test fixtures ─────────────────────────────────────────────────
 
 
