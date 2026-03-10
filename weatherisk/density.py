@@ -13,6 +13,13 @@ import numpy as np
 from scipy.special import gammaln, stdtr
 from scipy.stats import norm
 
+try:
+    import weatherisk_core as _rc
+
+    _HAS_RUST_DENSITY = True
+except ImportError:
+    _HAS_RUST_DENSITY = False
+
 from weatherisk.covariance import cov_fkt_2d
 
 
@@ -74,6 +81,26 @@ def pairwise_density_summand(
     float or ndarray
         Log pairwise density contribution.
     """
+    if _HAS_RUST_DENSITY:
+        z1_arr = np.asarray(z1, dtype=float)
+        z2_arr = np.asarray(z2, dtype=float)
+        x_arr = np.asarray(x, dtype=float)
+        y_arr = np.asarray(y, dtype=float)
+        result = _rc.pairwise_density_summand_vec(
+            np.atleast_1d(z1_arr),
+            np.atleast_1d(z2_arr),
+            np.atleast_1d(x_arr),
+            np.atleast_1d(y_arr),
+            df,
+            alpha,
+            a,
+            b,
+            g,
+        )
+        if np.isscalar(z1) and np.isscalar(z2) and np.isscalar(x) and np.isscalar(y):
+            return float(result[0])
+        return np.asarray(result)
+
     cv = cov_fkt_2d(x, y, alpha, a, b, g)
     c = np.sqrt(1 - cv * cv) / np.sqrt(df + 1)
 
@@ -125,6 +152,7 @@ def pairwise_density_optim(
     upper_bounds: tuple[float, float] = (15.0, 15.0),
     ensemble: int = 3,
     max_dist: float = 0.0,
+    _pair_block_size: int = 5000,
 ) -> np.ndarray:
     """Global MLE of (a, b, g) via multi-start L-BFGS-B.
 
@@ -144,6 +172,9 @@ def pairwise_density_optim(
         Number of multi-start runs.
     max_dist : float
         Maximum pairwise distance (0 = no limit).
+    _pair_block_size : int
+        Number of pairs per block for NLL computation.  Larger blocks
+        use more memory but have less Python-loop overhead.
 
     Returns
     -------
@@ -154,24 +185,23 @@ def pairwise_density_optim(
     from scipy.stats import qmc
 
     n_grid = len(X)
-
-    # Build pair lists
-    ilist, jlist = np.triu_indices(n_grid, k=1)
     n_sim = z.shape[1]
 
-    Xlist = np.repeat(X[ilist] - X[jlist], n_sim)
-    Ylist = np.repeat(Y[ilist] - Y[jlist], n_sim)
-    zilist = z[ilist].reshape(-1)
-    zjlist = z[jlist].reshape(-1)
+    # Build pair indices (no n_sim expansion yet)
+    ilist, jlist = np.triu_indices(n_grid, k=1)
+    dx = X[ilist] - X[jlist]
+    dy = Y[ilist] - Y[jlist]
 
+    # Filter by distance BEFORE any n_sim expansion
     if max_dist > 0:
-        sel = Xlist ** 2 + Ylist ** 2 <= max_dist ** 2
-        zilist = zilist[sel]
-        zjlist = zjlist[sel]
-        Xlist = Xlist[sel]
-        Ylist = Ylist[sel]
+        sel = dx * dx + dy * dy <= max_dist * max_dist
+        ilist = ilist[sel]
+        jlist = jlist[sel]
+        dx = dx[sel]
+        dy = dy[sel]
 
-    if len(zilist) == 0:
+    n_pairs = len(ilist)
+    if n_pairs == 0:
         return np.array([0.0, 0.0, 0.0])
 
     lo = np.array([lower_bounds[0], lower_bounds[1], -np.pi / 2])
@@ -183,22 +213,46 @@ def pairwise_density_optim(
     from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
     from weatherisk.backend import _USE_RUST
 
+    # Block-based NLL: expand pairs by n_sim in blocks to limit memory.
+    # Each block creates temporary arrays of size block_size * n_sim.
+    block_size = min(_pair_block_size, n_pairs)
+
     _has_jac = False
     if _USE_RUST:
         from weatherisk.backend import _rc
+
         def neg_llh(par_scaled):
             par = par_scaled * parscale
-            fval, grad_raw = _rc.nll_with_gradient(
-                zilist, zjlist, Xlist, Ylist, df, alpha,
-                par[0], par[1], par[2],
-            )
-            return fval, grad_raw * parscale  # chain rule for scaling
+            total_nll = 0.0
+            total_grad = np.zeros(3)
+            for bs in range(0, n_pairs, block_size):
+                be = min(bs + block_size, n_pairs)
+                bzi = z[ilist[bs:be]].reshape(-1)
+                bzj = z[jlist[bs:be]].reshape(-1)
+                bx = np.repeat(dx[bs:be], n_sim)
+                by = np.repeat(dy[bs:be], n_sim)
+                fval, grad = _rc.nll_with_gradient(
+                    bzi, bzj, bx, by, df, alpha,
+                    par[0], par[1], par[2],
+                )
+                total_nll += fval
+                total_grad += grad
+            return total_nll, total_grad * parscale
+
         _has_jac = True
     else:
         def neg_llh(par_scaled):
             par = par_scaled * parscale
-            return _nll_sum(zilist, zjlist, Xlist, Ylist, df, alpha,
-                            par[0], par[1], par[2])
+            total = 0.0
+            for bs in range(0, n_pairs, block_size):
+                be = min(bs + block_size, n_pairs)
+                bzi = z[ilist[bs:be]].reshape(-1)
+                bzj = z[jlist[bs:be]].reshape(-1)
+                bx = np.repeat(dx[bs:be], n_sim)
+                by = np.repeat(dy[bs:be], n_sim)
+                total += _nll_sum(bzi, bzj, bx, by, df, alpha,
+                                  par[0], par[1], par[2])
+            return total
 
     # Bounds in scaled space
     lo_s = lo / parscale

@@ -37,6 +37,36 @@ pub fn cov_fkt_2d(x: f64, y: f64, alpha: f64, a: f64, b: f64, g: f64) -> f64 {
     }
 }
 
+/// Convert covariance to extremal coefficient.
+#[inline]
+pub fn cov_to_ec(df: f64, cov: f64) -> f64 {
+    if cov >= 1.0 {
+        return 1.0;
+    }
+    let cov = cov.max(-1.0 + 1e-12);
+    let scale = ((1.0 - cov * cov) / (df + 1.0)).sqrt();
+    2.0 * t_cdf((1.0 - cov) / scale, df + 1.0)
+}
+
+/// Invert `cov_to_ec` via bisection on [0, 1].
+pub fn ec_to_cov(df: f64, ec: f64) -> f64 {
+    let ec = ec.min(cov_to_ec(df, 0.0));
+    let mut lo = 0.0_f64;
+    let mut hi = 1.0_f64;
+
+    for _ in 0..100 {
+        let mid = 0.5 * (lo + hi);
+        let f_mid = cov_to_ec(df, mid) - ec;
+        if f_mid > 0.0 {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+
+    0.5 * (lo + hi)
+}
+
 // ── Student-t helpers ────────────────────────────────────────────────────
 
 /// Log normalising constant of the Student-t PDF.
@@ -324,15 +354,14 @@ pub fn nll_with_gradient(
     }
 
     let params = [a, b, g];
-    let eps = 1e-8;
+    let eps = 1e-5;
     let mut grad = [0.0; 3];
 
     for i in 0..3 {
-        let h = eps * params[i].abs().max(1.0);
         let mut p = params;
-        p[i] += h;
+        p[i] += eps;
         let fp = neg_log_likelihood_sum(z1, z2, x, y, df, alpha, p[0], p[1], p[2]);
-        grad[i] = if fp.is_finite() { (fp - f0) / h } else { 0.0 };
+        grad[i] = if fp.is_finite() { (fp - f0) / eps } else { 0.0 };
     }
 
     (f0, grad)
@@ -341,6 +370,19 @@ pub fn nll_with_gradient(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_csv_fixture(csv_text: &str) -> Vec<Vec<String>> {
+        csv_text
+            .lines()
+            .skip(1)
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| {
+                line.split(',')
+                    .map(|field| field.trim().trim_matches('"').to_string())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
 
     #[test]
     fn test_cov_at_origin() {
@@ -387,5 +429,72 @@ mod tests {
         let y = vec![0.3, 0.5, 0.2];
         let nll = neg_log_likelihood_sum(&z1, &z2, &x, &y, 5.0, 1.0, 0.5, 0.5, 0.1);
         assert!(nll.is_finite());
+    }
+
+    #[test]
+    fn test_cov_fkt_2d_matches_r_fixtures() {
+        let fixture = include_str!("../../../tests/reference_data/cov_fkt_2d_test_cases.csv");
+
+        for row in parse_csv_fixture(fixture) {
+            let x = row[0].parse::<f64>().expect("invalid x");
+            let y = row[1].parse::<f64>().expect("invalid y");
+            let a = row[2].parse::<f64>().expect("invalid a");
+            let b = row[3].parse::<f64>().expect("invalid b");
+            let g = row[4].parse::<f64>().expect("invalid g");
+            let alpha = row[5].parse::<f64>().expect("invalid alpha");
+            let expected = row[6].parse::<f64>().expect("invalid cov value");
+
+            assert!((cov_fkt_2d(x, y, alpha, a, b, g) - expected).abs() <= 1e-12);
+        }
+    }
+
+    #[test]
+    fn test_cov_to_ec_matches_r_fixtures() {
+        let fixture = include_str!("../../../tests/reference_data/cov_to_ec_test_cases.csv");
+
+        for row in parse_csv_fixture(fixture) {
+            let df = row[0].parse::<f64>().expect("invalid df");
+            let cov = row[1].parse::<f64>().expect("invalid cov");
+            let expected = row[2].parse::<f64>().expect("invalid ec");
+
+            assert!((cov_to_ec(df, cov) - expected).abs() <= 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_ec_to_cov_matches_r_fixtures() {
+        let fixture = include_str!("../../../tests/reference_data/ec_to_cov_test_cases.csv");
+
+        for row in parse_csv_fixture(fixture) {
+            let df = row[0].parse::<f64>().expect("invalid df");
+            let ec = row[1].parse::<f64>().expect("invalid ec");
+            let expected = row[2].parse::<f64>().expect("invalid cov");
+
+            assert!((ec_to_cov(df, ec) - expected).abs() <= 1e-4);
+        }
+    }
+
+    #[test]
+    fn test_pairwise_density_matches_r_fixtures() {
+        let fixture = include_str!("../../../tests/reference_data/pairwise_density_test_cases.csv");
+
+        for row in parse_csv_fixture(fixture) {
+            let z1 = row[0].parse::<f64>().expect("invalid z1");
+            let z2 = row[1].parse::<f64>().expect("invalid z2");
+            let x = row[2].parse::<f64>().expect("invalid x");
+            let y = row[3].parse::<f64>().expect("invalid y");
+            let df = row[4].parse::<f64>().expect("invalid df");
+            let alpha = row[5].parse::<f64>().expect("invalid alpha");
+            let a = row[6].parse::<f64>().expect("invalid a");
+            let b = row[7].parse::<f64>().expect("invalid b");
+            let g = row[8].parse::<f64>().expect("invalid g");
+            let expected = row[9].parse::<f64>().expect("invalid density value");
+
+            assert!(
+                (pairwise_density_summand_scalar(z1, z2, x, y, df, alpha, a, b, g) - expected)
+                    .abs()
+                    <= 1e-8
+            );
+        }
     }
 }

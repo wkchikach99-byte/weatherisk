@@ -65,6 +65,16 @@ fn cov_fkt_2d_scalar(x: f64, y: f64, alpha: f64, a: f64, b: f64, g: f64) -> f64 
     density::cov_fkt_2d(x, y, alpha, a, b, g)
 }
 
+#[pyfunction]
+fn cov_to_ec(df: f64, cov: f64) -> f64 {
+    density::cov_to_ec(df, cov)
+}
+
+#[pyfunction]
+fn ec_to_cov(df: f64, ec: f64) -> f64 {
+    density::ec_to_cov(df, ec)
+}
+
 /// Negative log-likelihood sum over paired observation arrays.
 ///
 /// This is the objective function called by the Python L-BFGS-B optimizer.
@@ -179,6 +189,8 @@ fn weatherisk_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(number_grid, m)?)?;
     m.add_function(wrap_pyfunction!(koord_num, m)?)?;
     m.add_function(wrap_pyfunction!(cov_fkt_2d_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(cov_to_ec, m)?)?;
+    m.add_function(wrap_pyfunction!(ec_to_cov, m)?)?;
     m.add_function(wrap_pyfunction!(neg_log_likelihood_sum, m)?)?;
     m.add_function(wrap_pyfunction!(nll_with_gradient_py, m)?)?;
     m.add_function(wrap_pyfunction!(pairwise_density_summand_vec, m)?)?;

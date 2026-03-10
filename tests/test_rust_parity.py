@@ -104,6 +104,50 @@ class TestGridHelperRFixtures:
             assert rs_n == int(row["grid_num"]) - 1
 
 
+class TestDeterministicKernelRFixtures:
+    """Deterministic kernel bindings: Rust vs frozen R fixtures."""
+
+    def test_cov_fkt_2d(self):
+        ref = pd.read_csv(REF / "cov_fkt_2d_test_cases.csv")
+
+        for _, row in ref.iterrows():
+            rs_val = _rc.cov_fkt_2d_scalar(
+                row["x"], row["y"], row["alpha"], row["a"], row["b"], row["g"]
+            )
+            assert rs_val == pytest.approx(row["cov_value"], abs=1e-12)
+
+    def test_cov_to_ec(self):
+        ref = pd.read_csv(REF / "cov_to_ec_test_cases.csv")
+
+        for _, row in ref.iterrows():
+            rs_val = _rc.cov_to_ec(row["df"], row["cov"])
+            assert rs_val == pytest.approx(row["ec"], abs=1e-10)
+
+    def test_ec_to_cov(self):
+        ref = pd.read_csv(REF / "ec_to_cov_test_cases.csv")
+
+        for _, row in ref.iterrows():
+            rs_val = _rc.ec_to_cov(row["df"], row["ec"])
+            assert rs_val == pytest.approx(row["cov"], abs=1e-4)
+
+    def test_pairwise_density_summand(self):
+        ref = pd.read_csv(REF / "pairwise_density_test_cases.csv")
+
+        for _, row in ref.iterrows():
+            rs_val = _rc.pairwise_density_summand_vec(
+                np.array([row["z1"]], dtype=float),
+                np.array([row["z2"]], dtype=float),
+                np.array([row["x"]], dtype=float),
+                np.array([row["y"]], dtype=float),
+                row["df"],
+                row["alpha"],
+                row["a"],
+                row["b"],
+                row["g"],
+            )[0]
+            assert rs_val == pytest.approx(row["density_value"], abs=1e-8)
+
+
 # ── Shared test fixtures ─────────────────────────────────────────────────
 
 

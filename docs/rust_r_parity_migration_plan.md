@@ -173,8 +173,8 @@ Legend:
 
 | Function | A1 | A2 | A3 | A4 | A5 | A6 | A7 | A8 | overall_passes | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `cov_fkt_2d` | true | true | false | false | false | false | false | false | false | Rust scalar implementation exists; strict Rust-vs-R fixture test still missing. |
-| `pairwise_density_summand` | true | true | false | false | false | false | false | false | false | Vector binding exists; current strict acceptance still blocked on Rust-side R-fixture conformance. |
+| `cov_fkt_2d` | true | true | true | true | true | true | true | true | true | Accepted in unit 2: Rust fixture tests are authoritative; Python tests cover binding and routed covariance calls. |
+| `pairwise_density_summand` | true | true | true | true | true | true | true | true | true | Accepted in unit 2: Rust fixture tests are authoritative; Python tests cover binding and routed density calls. |
 | `pairwise_density_optim_local` | true | false | false | false | false | false | false | false | false | Existing optimizer is not yet accepted as the R-conformance implementation. |
 | `smooth_local_estimates` | false | false | false | false | false | false | false | false | false | Not yet migrated into Rust. |
 | `calc_distance_ellipses` | true | true | false | false | false | false | false | false | false | Rust implementation exists, but parity mode and strict Rust-vs-R fixture acceptance are not finalized. |
@@ -189,8 +189,8 @@ Legend:
 | `koord_num` | true | true | true | true | true | true | true | true | true | Helper unit accepted: Rust fixture tests are authoritative; Python tests cover binding and routing. |
 | `crop_matrix` | false | false | false | false | false | false | false | false | false | Not yet migrated into Rust. |
 | `crop_local_estimates` | false | false | false | false | false | false | false | false | false | Not yet migrated into Rust. |
-| `cov_to_ec` | false | true | false | false | false | false | false | false | false | R fixtures already exist; Rust implementation does not yet exist. |
-| `ec_to_cov` | false | true | false | false | false | false | false | false | false | R fixtures already exist; Rust implementation does not yet exist. |
+| `cov_to_ec` | true | true | true | true | true | true | true | true | true | Accepted in unit 2: Rust implementation added and routed into Python covariance helpers. |
+| `ec_to_cov` | true | true | true | true | true | true | true | true | true | Accepted in unit 2: Rust implementation added and routed into Python covariance helpers. |
 
 ## Function Mapping Table
 
@@ -246,6 +246,13 @@ Accepted in this phase so far:
 
 ### Phase 3: Migrate deterministic Tier 1 kernels
 passes: false
+
+Accepted in this phase so far:
+
+1. `cov_fkt_2d`
+2. `cov_to_ec`
+3. `ec_to_cov`
+4. `pairwise_density_summand`
 
 ### Phase 4: Migrate `pairwise_density_optim_local`
 passes: false
