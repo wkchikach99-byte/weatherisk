@@ -87,7 +87,7 @@ class PipelineConfig:
     # Local estimation  (§3.2) — normalised-coordinate units
     neighbor_radius: float = 3.0  # ε  neighbourhood for pairwise CL
     smoothing_radius: float = 2.0 # spatial smoothing
-    mle_ensemble: int = 3         # multi-start L-BFGS-B
+    mle_ensemble: int = 5         # multi-start L-BFGS-B
 
     # Clustering  (§3.3)
     quantile_threshold: float = 0.30  # 30 %-quantile of pairwise dists

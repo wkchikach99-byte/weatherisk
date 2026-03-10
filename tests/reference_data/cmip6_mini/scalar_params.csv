@@ -1,0 +1,9 @@
+"parameter","value"
+"resolution",5
+"n_years",20
+"n_months",240
+"nrow_grid",5
+"ncol_grid",5
+"n_grid",25
+"df_true",5
+"alpha_true",1

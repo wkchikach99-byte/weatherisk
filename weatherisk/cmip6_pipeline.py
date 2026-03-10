@@ -84,7 +84,7 @@ class CMIP6Config:
     # Local estimation — ε = 5 grid point distance
     neighbor_radius: float = 5.0   # ε  in grid-point units
     smoothing_radius: float = 2.0  # spatial smoothing in grid-point units
-    mle_ensemble: int = 3          # multi-start restarts
+    mle_ensemble: int = 5          # multi-start restarts
 
     # Clustering (§5)
     quantile_threshold: float = 0.30  # 30%-quantile of pairwise dists
@@ -768,7 +768,10 @@ def _smooth_estimates_cmip6(
 # ══════════════════════════════════════════════════════════════════
 
 def _edc_matrix_flat(frechet: np.ndarray) -> np.ndarray:
-    """Rank-based madogram extremal-coefficient matrix for flat data.
+    """Rank-based madogram dissimilarity matrix for flat data.
+
+    Returns the raw madogram values v(i,j) as used in Contzen et al. (2025)
+    for clustering.  These are the rank-based pairwise distances in [0, 0.5).
 
     Parameters
     ----------
@@ -781,19 +784,15 @@ def _edc_matrix_flat(frechet: np.ndarray) -> np.ndarray:
 
     diff_sum = cdist(ranks, ranks, metric="cityblock")
     v = diff_sum / (n_years * 2.0 * (n_years + 1))
-    denom = 1.0 - 2.0 * v
-    denom[denom <= 0] = 1e-12
-    ec = np.minimum(1.0, (1.0 + 2.0 * v) / denom - 1.0)
-    np.fill_diagonal(ec, 0.0)
-    return ec
+    np.fill_diagonal(v, 0.0)
+    return v
 
 
 def _edc_condensed_flat(frechet: np.ndarray) -> np.ndarray:
-    """Condensed rank-based madogram extremal-coefficient distances.
+    """Condensed rank-based madogram dissimilarity distances.
 
-    This is numerically equivalent to :func:`_edc_matrix_flat`, but returns the
-    upper triangle directly so callers can avoid materializing the full square
-    matrix when they only need thresholding and linkage.
+    Returns the raw madogram values (upper triangle) matching
+    :func:`_edc_matrix_flat`, for use with scipy linkage.
     """
     n_years, n_cells = frechet.shape
     ranks = np.empty((n_cells, n_years))
@@ -801,10 +800,7 @@ def _edc_condensed_flat(frechet: np.ndarray) -> np.ndarray:
         ranks[s] = rankdata(frechet[:, s])
 
     diff_sum = pdist(ranks, metric="cityblock")
-    v = diff_sum / (n_years * 2.0 * (n_years + 1))
-    denom = 1.0 - 2.0 * v
-    denom[denom <= 0] = 1e-12
-    return np.minimum(1.0, (1.0 + 2.0 * v) / denom - 1.0)
+    return diff_sum / (n_years * 2.0 * (n_years + 1))
 
 
 def _run_clustering_cmip6(

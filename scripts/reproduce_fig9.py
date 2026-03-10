@@ -89,6 +89,8 @@ def main():
     print(f"  ν={cfg.df}, α={cfg.alpha}, ε={cfg.neighbor_radius}")
     print(f"  Period: {cfg.year_start}–{cfg.year_end}")
     print(f"  Workers: {cfg.n_workers}")
+    from weatherisk.backend import _USE_RUST
+    print(f"  Backend: {'Rust (weatherisk_core)' if _USE_RUST else 'Python (pure NumPy/SciPy)'}")
     print(f"  Output: {cfg.output_dir}")
     print("=" * 60)
 
