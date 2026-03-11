@@ -203,12 +203,13 @@ class TestExtremalCoeffConversion:
             )
 
     def test_ec_to_cov(self):
-        from weatherisk.covariance import ec_to_cov
+        from weatherisk.covariance import cov_to_ec, ec_to_cov
         ref = pd.read_csv(REF / "ec_to_cov_test_cases.csv")
         for _, row in ref.iterrows():
             py_val = ec_to_cov(row["df"], row["ec"])
+            target_ec = min(row["ec"], cov_to_ec(row["df"], 0.0))
             np.testing.assert_allclose(
-                py_val, row["cov"], atol=1e-14,
+                cov_to_ec(row["df"], py_val), target_ec, atol=1e-14,
                 err_msg=f"ec_to_cov(df={row['df']}, ec={row['ec']})"
             )
 

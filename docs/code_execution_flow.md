@@ -18,7 +18,7 @@ they write. It is meant to answer three practical questions:
 | `weatherisk cmip6` | `weatherisk.cli.cmip6` → `weatherisk.cmip6_pipeline.run_cmip6_pipeline` | Figure 9 CMIP6 reproduction |
 | `weatherisk risk-pipeline` | `weatherisk.cli.risk_pipeline` | Post-process a precomputed risk CSV |
 | `scripts/reproduce_fig9.py` | Thin wrapper around `run_cmip6_pipeline` and `plot_figure9` | Scriptable Figure 9 run outside the package entrypoint |
-| `weatherisk.benchmarks.run_hotpath_benchmark` | Wraps `run_cmip6_pipeline` with synthetic input and timing hooks | Benchmark the actual CMIP6 orchestration path |
+| `weatherisk.benchmarks.run_figure9_benchmark` | Runs `scripts.reproduce_fig9.main` with reduced synthetic data and timing hooks | Benchmark the actual Figure 9 script path |
 
 ## Shared Computational Kernels
 

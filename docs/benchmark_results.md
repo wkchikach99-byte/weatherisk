@@ -1,9 +1,23 @@
 # Benchmark Results
 
 This file records benchmark evidence for the CMIP6 Figure 9 pipeline.
-Each run uses the real `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
-orchestration path, with deterministic synthetic data injected only at the
+Each run uses the real `scripts/reproduce_fig9.py` entrypoint used by the
+SLURM Figure 9 job, with deterministic synthetic data injected only at the
 data-loading boundary.
+
+## Canonical Workflow
+
+- Canonical runner: `python scripts/run_fig9_benchmark.py`
+- Script entrypoint under test: `scripts.reproduce_fig9.main`
+- Pipeline entrypoint under test: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
+- Default intent: reduced Figure 9 case that preserves the production call chain while finishing in roughly a minute or less
+- Recorded metrics: total wall time, per-step timings, peak process-tree RSS, and generated figure count
+
+## Methodology Learnings
+
+- A real script entrypoint is required for multiprocessing benchmarks; heredoc or stdin entrypoints can give misleading results or fail under macOS spawn mode.
+- For the CMIP6 Figure 9 path, Step 3 local MLE remains the primary bottleneck; optimizer cost dominates pair-array assembly once the production likelihood is active.
+- Memory-oriented clustering refactors matter more on larger grids than on tiny synthetic cases, where interpreter and worker overhead can hide the effect.
 
 The benchmark policy changed on 2026-03-09. From that point onward, only the
 medium repeated-run benchmark is treated as decision-grade evidence. Earlier

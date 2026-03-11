@@ -10,12 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-try:
-    import weatherisk_core as _rc
-
-    _HAS_RUST_GRID = True
-except ImportError:
-    _HAS_RUST_GRID = False
+_HAS_RUST_GRID = False
 
 
 def rad(degrees: float) -> float:
@@ -30,15 +25,11 @@ def deg(radians: float) -> float:
 
 def dist_x(x1: float, x2: float) -> float:
     """R helper: horizontal distance as x1 - x2."""
-    if _HAS_RUST_GRID:
-        return float(_rc.dist_x(x1, x2))
     return x1 - x2
 
 
 def dist_y(y1: float, y2: float) -> float:
     """R helper: vertical distance as y1 - y2."""
-    if _HAS_RUST_GRID:
-        return float(_rc.dist_y(y1, y2))
     return y1 - y2
 
 
@@ -95,8 +86,6 @@ class Grid:
                 f"Index ({i}, {j}) out of bounds for grid "
                 f"{self.nrow}×{self.ncol}"
             )
-        if _HAS_RUST_GRID:
-            return int(_rc.grid_number(i, j, self.nrow, self.ncol))
         return j * self.nrow + i
 
     def number_grid(self, n: int) -> tuple[int, int]:
@@ -111,9 +100,6 @@ class Grid:
             raise IndexError(
                 f"Index {n} out of bounds for grid size {self.n_grid}"
             )
-        if _HAS_RUST_GRID:
-            i, j = _rc.number_grid(n, self.nrow, self.ncol)
-            return int(i), int(j)
         i = n % self.nrow
         j = n // self.nrow
         return i, j

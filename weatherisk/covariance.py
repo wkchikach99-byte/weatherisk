@@ -16,12 +16,7 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.stats import t as t_dist
 
-try:
-    import weatherisk_core as _rc
-
-    _HAS_RUST_COVARIANCE = True
-except ImportError:
-    _HAS_RUST_COVARIANCE = False
+_HAS_RUST_COVARIANCE = False
 
 
 def cov_fkt_2d(
@@ -54,18 +49,6 @@ def cov_fkt_2d(
     float or ndarray
         Covariance value(s) in (0, 1].
     """
-    if _HAS_RUST_COVARIANCE:
-        if np.isscalar(x) and np.isscalar(y):
-            return float(_rc.cov_fkt_2d_scalar(float(x), float(y), alpha, a, b, g))
-
-        x_arr = np.asarray(x, dtype=float)
-        y_arr = np.asarray(y, dtype=float)
-        vec = np.vectorize(
-            lambda xi, yi: _rc.cov_fkt_2d_scalar(float(xi), float(yi), alpha, a, b, g),
-            otypes=[float],
-        )
-        return vec(x_arr, y_arr)
-
     sg = np.sin(g)
     cg = np.cos(g)
     ap = a + b  # semi-major
@@ -216,12 +199,10 @@ def cov_to_ec(df: float, cov: float) -> float:
     float
         Extremal coefficient in [1, 2].
     """
-    if _HAS_RUST_COVARIANCE:
-        if np.isscalar(cov):
-            return float(_rc.cov_to_ec(df, float(cov)))
-        cov_arr = np.asarray(cov, dtype=float)
-        vec = np.vectorize(lambda cov_i: _rc.cov_to_ec(df, float(cov_i)), otypes=[float])
-        return vec(cov_arr)
+    # Keep the extremal-coefficient conversion on the SciPy path for now.
+    # The Rust `ec_to_cov` implementation currently uses a looser root-finding
+    # tolerance than the frozen R fixtures, which is enough to break the
+    # cross-validation suite at strict parity tolerances.
 
     if cov >= 1.0:
         return 1.0

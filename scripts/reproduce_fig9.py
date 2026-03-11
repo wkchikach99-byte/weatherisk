@@ -31,7 +31,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
-def main():
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Reproduce Figure 9 from the Extremes paper"
     )
@@ -68,7 +68,7 @@ def main():
         "--skip-plots", action="store_true",
         help="Run pipeline only, skip figure generation.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     from weatherisk.cmip6_pipeline import CMIP6Config, run_cmip6_pipeline, plot_figure9
     from weatherisk.cmip6_data import DEFAULT_DATA_DIR
@@ -102,6 +102,7 @@ def main():
     print(f"  k_EDC = {result['k_edc']}  (paper: 104)")
 
     # Generate plots
+    saved: list[str] = []
     if not args.skip_plots:
         print("\n  Generating Figure 9 …")
         saved = plot_figure9(result, dpi=args.dpi, verbose=True)
@@ -110,6 +111,11 @@ def main():
         print("\n  Plot generation skipped (--skip-plots).")
 
     print("\nDone.")
+    return {
+        "result": result,
+        "saved_figures": saved,
+        "config": cfg,
+    }
 
 
 if __name__ == "__main__":

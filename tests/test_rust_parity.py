@@ -1,4 +1,4 @@
-"""Numerical parity tests: Python vs Rust (weatherisk_core).
+"""Legacy Rust parity tests.
 
 Tests at every level of the computation:
   1. Covariance function
@@ -26,16 +26,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-# ── Availability check ────────────────────────────────────────────────────
+pytestmark = pytest.mark.skip("Rust backend has been retired from active code paths.")
 
 try:
     import weatherisk_core as _rc
-
-    HAS_RUST = True
-except ImportError:
-    HAS_RUST = False
-
-pytestmark = pytest.mark.skipif(not HAS_RUST, reason="weatherisk_core not built")
+except ImportError:  # pragma: no cover - legacy-only module import
+    _rc = None
 
 REF = Path(__file__).parent / "reference_data"
 

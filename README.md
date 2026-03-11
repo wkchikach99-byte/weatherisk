@@ -69,7 +69,7 @@ The current CLI has five subcommands, but they are not all at the same maturity 
 - `docs/code_execution_flow.md`: function-level execution flow for each implemented pipeline
 - `docs/pipeline_bottleneck_analysis.md`: current bottlenecks, split by CMIP6 and CPC paths
 - `docs/methodology_notes.md`: methodological interpretation notes for the CPC maps pipeline
-- `docs/benchmark_results.md`: benchmark evidence for the optimized CMIP6 Figure 9 path
+- `docs/benchmark_results.md`: canonical benchmark log and methodology notes for the reduced Figure 9 benchmark path
 
 ## Pipeline Flows
 

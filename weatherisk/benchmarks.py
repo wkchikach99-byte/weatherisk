@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import io
+import importlib.util
 import json
-import subprocess
-import time
 import os
+import subprocess
 import threading
-from contextlib import contextmanager
+import time
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +16,20 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 import weatherisk.cmip6_pipeline as cmip6_pipeline
-from weatherisk.cmip6_pipeline import CMIP6Config, run_cmip6_pipeline
+from weatherisk.cmip6_pipeline import CMIP6Config
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_reproduce_fig9_module():
+    module_path = _REPO_ROOT / "scripts" / "reproduce_fig9.py"
+    spec = importlib.util.spec_from_file_location("weatherisk_reproduce_fig9", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load benchmark entrypoint from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class _PeakMemorySampler:
@@ -83,43 +98,42 @@ def _profile_peak_memory(*, interval_seconds: float = 0.05):
 
 
 @dataclass
-class HotPathBenchmarkConfig:
+class Figure9BenchmarkConfig:
     seed: int = 12345
-    n_years: int = 24
-    n_lat: int = 8
-    n_lon: int = 8
+    n_years: int = 12
+    n_lat: int = 5
+    n_lon: int = 5
     n_workers: int = 4
-    df: float = 5.0
-    alpha: float = 1.0
-    neighbor_radius: float = 3.0
-    smoothing_radius: float = 2.0
-    mle_ensemble: int = 3
-    stl_period: int = 12
+    year_start: int = 1980
+    dpi: int = 300
+    generate_plots: bool = True
+    backend: str = "python"
+    suppress_script_output: bool = True
 
 
 @dataclass
 class DecisionBenchmarkConfig:
-    benchmark: HotPathBenchmarkConfig = field(
-        default_factory=lambda: HotPathBenchmarkConfig(
-            n_years=48,
-            n_lat=16,
-            n_lon=16,
+    benchmark: Figure9BenchmarkConfig = field(
+        default_factory=lambda: Figure9BenchmarkConfig(
+            n_years=12,
+            n_lat=5,
+            n_lon=5,
             n_workers=4,
-            neighbor_radius=3.0,
-            smoothing_radius=2.0,
-            mle_ensemble=3,
         )
     )
-    warmup_runs: int = 1
-    measured_runs: int = 5
+    warmup_runs: int = 0
+    measured_runs: int = 1
 
 
-def _synthetic_monthly_precip(config: HotPathBenchmarkConfig) -> tuple[np.ndarray, np.ndarray]:
+HotPathBenchmarkConfig = Figure9BenchmarkConfig
+
+
+def _synthetic_monthly_precip(config: Figure9BenchmarkConfig) -> tuple[np.ndarray, np.ndarray]:
     rng = np.random.default_rng(config.seed)
     n_months = config.n_years * 12
     times = np.arange(
-        np.datetime64("1980-01"),
-        np.datetime64("1980-01") + np.timedelta64(n_months, "M"),
+        np.datetime64(f"{config.year_start:04d}-01"),
+        np.datetime64(f"{config.year_start:04d}-01") + np.timedelta64(n_months, "M"),
         np.timedelta64(1, "M"),
     )
 
@@ -176,6 +190,19 @@ def _patched_pipeline_environment(
 
 
 @contextmanager
+def _forced_backend(backend: str):
+    old_backend = os.environ.get("WEATHERISK_BACKEND")
+    os.environ["WEATHERISK_BACKEND"] = backend
+    try:
+        yield
+    finally:
+        if old_backend is None:
+            os.environ.pop("WEATHERISK_BACKEND", None)
+        else:
+            os.environ["WEATHERISK_BACKEND"] = old_backend
+
+
+@contextmanager
 def _timed_pipeline_steps(timings: dict[str, float]):
     """Wrap full-pipeline step functions so run_cmip6_pipeline records timings."""
     step_names = [
@@ -186,6 +213,7 @@ def _timed_pipeline_steps(timings: dict[str, float]):
         "_smooth_estimates_cmip6",
         "_run_clustering_cmip6",
         "_incluster_reestimate_cmip6",
+        "plot_figure9",
     ]
     originals = {name: getattr(cmip6_pipeline, name) for name in step_names}
 
@@ -208,40 +236,49 @@ def _timed_pipeline_steps(timings: dict[str, float]):
             setattr(cmip6_pipeline, name, func)
 
 
-def run_hotpath_benchmark(
-    config: HotPathBenchmarkConfig | None = None,
+def run_figure9_benchmark(
+    config: Figure9BenchmarkConfig | None = None,
     *,
     markdown_path: str | Path | None = None,
 ) -> dict[str, float | int | str | dict[str, float | int | str]]:
-    config = config or HotPathBenchmarkConfig()
+    config = config or Figure9BenchmarkConfig()
     pr, times = _synthetic_monthly_precip(config)
     lats = np.linspace(-60.0, 60.0, config.n_lat)
     lons = np.linspace(0.0, 360.0 - 360.0 / config.n_lon, config.n_lon)
-    pipeline_cfg = CMIP6Config(
-        df=config.df,
-        alpha=config.alpha,
-        neighbor_radius=config.neighbor_radius,
-        smoothing_radius=config.smoothing_radius,
-        mle_ensemble=config.mle_ensemble,
-        stl_period=config.stl_period,
-        n_workers=config.n_workers,
-        retain_clustering_artifacts=False,
-    )
-
     timings: dict[str, float] = {}
 
     with TemporaryDirectory(prefix="weatherisk-benchmark-") as tmpdir:
-        pipeline_cfg.output_dir = tmpdir
         with _profile_peak_memory() as memory_sampler:
             t0 = time.perf_counter()
-            with _patched_pipeline_environment(pr, times, lats, lons), _timed_pipeline_steps(timings):
-                result = run_cmip6_pipeline(pipeline_cfg, verbose=False)
+            with _forced_backend(config.backend), _patched_pipeline_environment(pr, times, lats, lons), _timed_pipeline_steps(timings):
+                reproduce_fig9 = _load_reproduce_fig9_module()
+
+                argv = [
+                    "--data-dir", "synthetic-benchmark",
+                    "--workers", str(config.n_workers),
+                    "--output-dir", tmpdir,
+                    "--year-start", str(config.year_start),
+                    "--year-end", str(config.year_start + config.n_years - 1),
+                    "--dpi", str(config.dpi),
+                ]
+                if not config.generate_plots:
+                    argv.append("--skip-plots")
+
+                if config.suppress_script_output:
+                    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                        run_out = reproduce_fig9.main(argv)
+                else:
+                    run_out = reproduce_fig9.main(argv)
             total = time.perf_counter() - t0
+
+        result = run_out["result"]
+        saved_figures = run_out["saved_figures"]
 
     result = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "git_revision": _git_revision(),
-        "entrypoint": "weatherisk.cmip6_pipeline.run_cmip6_pipeline",
+        "script_entrypoint": "scripts.reproduce_fig9.main",
+        "pipeline_entrypoint": "weatherisk.cmip6_pipeline.run_cmip6_pipeline",
         "config": asdict(config),
         "derived": {
             "n_months": int(pr.shape[0]),
@@ -250,6 +287,11 @@ def run_hotpath_benchmark(
             "n_years_complete": int(len(result["years"])),
             "k_lec": int(result["k_lec"]),
             "k_edc": int(result["k_edc"]),
+            "saved_figure_count": int(len(saved_figures)),
+        },
+        "invocation": {
+            "backend": config.backend,
+            "plots_enabled": bool(config.generate_plots),
         },
         "timings_seconds": timings,
         "total_seconds": total,
@@ -275,6 +317,9 @@ def run_hotpath_benchmark(
     return result
 
 
+run_hotpath_benchmark = run_figure9_benchmark
+
+
 def run_decision_benchmark(
     config: DecisionBenchmarkConfig | None = None,
     *,
@@ -284,11 +329,11 @@ def run_decision_benchmark(
 
     warmups = []
     for _ in range(config.warmup_runs):
-        warmups.append(run_hotpath_benchmark(config.benchmark, markdown_path=None))
+        warmups.append(run_figure9_benchmark(config.benchmark, markdown_path=None))
 
     measured = []
     for _ in range(config.measured_runs):
-        measured.append(run_hotpath_benchmark(config.benchmark, markdown_path=None))
+        measured.append(run_figure9_benchmark(config.benchmark, markdown_path=None))
 
     total_seconds = np.array([run["total_seconds"] for run in measured], dtype=float)
     peak_rss_bytes = np.array(
@@ -311,7 +356,8 @@ def run_decision_benchmark(
     result: dict[str, object] = {
         "timestamp": measured[-1]["timestamp"],
         "git_revision": measured[-1]["git_revision"],
-        "entrypoint": measured[-1]["entrypoint"],
+        "script_entrypoint": measured[-1]["script_entrypoint"],
+        "pipeline_entrypoint": measured[-1]["pipeline_entrypoint"],
         "benchmark_method": {
             "case": "decision",
             "warmup_runs": config.warmup_runs,
@@ -354,9 +400,20 @@ def _append_benchmark_markdown(path: Path, result: dict[str, object]) -> None:
     if not path.exists():
         path.write_text(
             "# Benchmark Results\n\n"
-            "This file records benchmark runs for the CMIP6 Figure 9 pipeline.\n"
-            "Each run uses the same `run_cmip6_pipeline` orchestration path used by the HPC script,\n"
-            "with deterministic synthetic data injected only at the data-loading boundary.\n\n",
+            "This file is the canonical benchmark log for the CMIP6 Figure 9 path.\n"
+            "Each benchmark runs the real `scripts/reproduce_fig9.py` entrypoint used by the SLURM job,\n"
+            "with deterministic synthetic data injected only at the data-loading boundary so the reduced case\n"
+            "finishes quickly while preserving the production call chain.\n\n"
+            "## Benchmark Workflow\n\n"
+            "- Canonical runner: `python scripts/run_fig9_benchmark.py`\n"
+            "- Script entrypoint under test: `scripts.reproduce_fig9.main`\n"
+            "- Pipeline entrypoint under test: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`\n"
+            "- Default benchmark shape: reduced synthetic Figure 9 case intended to finish in about a minute or less\n"
+            "- Measured metrics: total wall time, per-step timings, and peak process-tree RSS\n\n"
+            "## Key Learnings\n\n"
+            "- A real script entrypoint is required for multiprocessing benchmarks; heredoc and stdin-driven entrypoints are not reliable on macOS spawn mode.\n"
+            "- CMIP6 local MLE remains the dominant hotspot; pair-array assembly matters less than optimizer cost once the production objective is in play.\n"
+            "- Memory wins in clustering matter most on larger grids; small synthetic cases can hide them behind interpreter and worker overhead.\n\n",
             encoding="utf-8",
         )
 
@@ -369,7 +426,8 @@ def _append_benchmark_markdown(path: Path, result: dict[str, object]) -> None:
         f"## Run {result['timestamp']}",
         "",
         f"- Git revision: `{result['git_revision']}`",
-        f"- Entrypoint: `{result['entrypoint']}`",
+        f"- Script entrypoint: `{result['script_entrypoint']}`",
+        f"- Pipeline entrypoint: `{result['pipeline_entrypoint']}`",
         f"- Total time: `{result['total_seconds']:.3f}s`",
         f"- Config: `{config}`",
         f"- Derived: `{derived}`",
@@ -398,9 +456,10 @@ def _append_decision_benchmark_markdown(path: Path, result: dict[str, object]) -
     if not path.exists():
         path.write_text(
             "# Benchmark Results\n\n"
-            "This file records benchmark runs for the CMIP6 Figure 9 pipeline.\n"
-            "Each run uses the same `run_cmip6_pipeline` orchestration path used by the HPC script,\n"
-            "with deterministic synthetic data injected only at the data-loading boundary.\n\n",
+            "This file is the canonical benchmark log for the CMIP6 Figure 9 path.\n"
+            "Each benchmark runs the real `scripts/reproduce_fig9.py` entrypoint used by the SLURM job,\n"
+            "with deterministic synthetic data injected only at the data-loading boundary so the reduced case\n"
+            "finishes quickly while preserving the production call chain.\n\n",
             encoding="utf-8",
         )
 
@@ -412,9 +471,10 @@ def _append_decision_benchmark_markdown(path: Path, result: dict[str, object]) -
         f"## Decision Benchmark {result['timestamp']}",
         "",
         f"- Git revision: `{result['git_revision']}`",
-        f"- Entrypoint: `{result['entrypoint']}`",
-        f"- Method: `1 warmup + {result['benchmark_method']['measured_runs']} measured runs` (warmups excluded from summary)",
-        f"- Benchmark case: `medium`",
+        f"- Script entrypoint: `{result['script_entrypoint']}`",
+        f"- Pipeline entrypoint: `{result['pipeline_entrypoint']}`",
+        f"- Method: `{result['benchmark_method']['warmup_runs']} warmup + {result['benchmark_method']['measured_runs']} measured runs` (warmups excluded from summary)",
+        f"- Benchmark case: `reduced Figure 9`",
         f"- Config: `{result['config']}`",
         f"- Derived: `{result['derived']}`",
         f"- Total time summary: mean `{total['mean_seconds']:.3f}s`, min `{total['min_seconds']:.3f}s`, max `{total['max_seconds']:.3f}s`, std `{total['std_seconds']:.3f}s`",

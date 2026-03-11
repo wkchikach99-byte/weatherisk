@@ -63,19 +63,8 @@ from scipy.spatial.distance import squareform
 REF = Path(__file__).parent / "reference_data"
 CMIP6_MINI_REF = REF / "cmip6_mini"
 
-# ── Rust availability ─────────────────────────────────────────────────────
-
-try:
-    import weatherisk_core as _rc  # noqa: F401
-    HAS_RUST = True
-except ImportError:
-    HAS_RUST = False
-
-
 # Backend IDs used by parametrized tests.
 _BACKENDS = ["python"]
-if HAS_RUST:
-    _BACKENDS.append("rust")
 
 
 @contextlib.contextmanager
@@ -88,7 +77,7 @@ def _force_backend(name: str):
     """
     import weatherisk.backend as _be
     old = _be._USE_RUST
-    _be._USE_RUST = (name == "rust")
+    _be._USE_RUST = False
     try:
         yield
     finally:

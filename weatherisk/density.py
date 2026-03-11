@@ -13,12 +13,7 @@ import numpy as np
 from scipy.special import gammaln, stdtr
 from scipy.stats import norm
 
-try:
-    import weatherisk_core as _rc
-
-    _HAS_RUST_DENSITY = True
-except ImportError:
-    _HAS_RUST_DENSITY = False
+_HAS_RUST_DENSITY = False
 
 from weatherisk.covariance import cov_fkt_2d
 
@@ -82,26 +77,6 @@ def pairwise_density_summand(
     float or ndarray
         Log pairwise density contribution.
     """
-    if _HAS_RUST_DENSITY:
-        z1_arr = np.asarray(z1, dtype=float)
-        z2_arr = np.asarray(z2, dtype=float)
-        x_arr = np.asarray(x, dtype=float)
-        y_arr = np.asarray(y, dtype=float)
-        result = _rc.pairwise_density_summand_vec(
-            np.atleast_1d(z1_arr),
-            np.atleast_1d(z2_arr),
-            np.atleast_1d(x_arr),
-            np.atleast_1d(y_arr),
-            df,
-            alpha,
-            a,
-            b,
-            g,
-        )
-        if np.isscalar(z1) and np.isscalar(z2) and np.isscalar(x) and np.isscalar(y):
-            return float(result[0])
-        return np.asarray(result)
-
     cv = cov_fkt_2d(x, y, alpha, a, b, g)
     c = np.sqrt(1 - cv * cv) / np.sqrt(df + 1)
 
