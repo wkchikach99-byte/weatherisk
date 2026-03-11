@@ -8,7 +8,7 @@ import subprocess
 import threading
 import time
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -101,8 +101,8 @@ def _profile_peak_memory(*, interval_seconds: float = 0.05):
 class Figure9BenchmarkConfig:
     seed: int = 12345
     n_years: int = 12
-    n_lat: int = 5
-    n_lon: int = 5
+    n_lat: int = 6
+    n_lon: int = 6
     n_workers: int = 4
     year_start: int = 1980
     dpi: int = 300
@@ -111,21 +111,16 @@ class Figure9BenchmarkConfig:
     suppress_script_output: bool = True
 
 
-@dataclass
-class DecisionBenchmarkConfig:
-    benchmark: Figure9BenchmarkConfig = field(
-        default_factory=lambda: Figure9BenchmarkConfig(
-            n_years=12,
-            n_lat=5,
-            n_lon=5,
-            n_workers=4,
-        )
-    )
-    warmup_runs: int = 0
-    measured_runs: int = 1
-
-
 HotPathBenchmarkConfig = Figure9BenchmarkConfig
+
+
+def _byte_scales(n_bytes: int) -> dict[str, float]:
+    return {
+        "bytes": int(n_bytes),
+        "kib": float(n_bytes / 1024.0),
+        "mib": float(n_bytes / (1024.0 ** 2)),
+        "gib": float(n_bytes / (1024.0 ** 3)),
+    }
 
 
 def _synthetic_monthly_precip(config: Figure9BenchmarkConfig) -> tuple[np.ndarray, np.ndarray]:
@@ -298,8 +293,7 @@ def run_figure9_benchmark(
         "memory_profile": {
             "metric": "peak_process_tree_rss",
             "sample_interval_seconds": memory_sampler.interval_seconds,
-            "max_rss_bytes": int(memory_sampler.max_rss_bytes),
-            "max_rss_gib": float(memory_sampler.max_rss_bytes / (1024 ** 3)),
+            "max_rss": _byte_scales(int(memory_sampler.max_rss_bytes)),
         },
         "checks": {
             "frechet_min": float(np.min(result["frechet"])),
@@ -318,81 +312,6 @@ def run_figure9_benchmark(
 
 
 run_hotpath_benchmark = run_figure9_benchmark
-
-
-def run_decision_benchmark(
-    config: DecisionBenchmarkConfig | None = None,
-    *,
-    markdown_path: str | Path | None = None,
-) -> dict[str, object]:
-    config = config or DecisionBenchmarkConfig()
-
-    warmups = []
-    for _ in range(config.warmup_runs):
-        warmups.append(run_figure9_benchmark(config.benchmark, markdown_path=None))
-
-    measured = []
-    for _ in range(config.measured_runs):
-        measured.append(run_figure9_benchmark(config.benchmark, markdown_path=None))
-
-    total_seconds = np.array([run["total_seconds"] for run in measured], dtype=float)
-    peak_rss_bytes = np.array(
-        [run["memory_profile"]["max_rss_bytes"] for run in measured], dtype=np.int64
-    )
-    step_names = list(measured[0]["timings_seconds"].keys())
-    step_stats: dict[str, dict[str, float]] = {}
-    for step in step_names:
-        values = np.array([run["timings_seconds"][step] for run in measured], dtype=float)
-        step_stats[step] = {
-            "mean_seconds": float(values.mean()),
-            "min_seconds": float(values.min()),
-            "max_seconds": float(values.max()),
-            "std_seconds": float(values.std(ddof=0)),
-        }
-
-    checks_reference = measured[0]["checks"]
-    checks_stable = all(run["checks"] == checks_reference for run in measured[1:])
-
-    result: dict[str, object] = {
-        "timestamp": measured[-1]["timestamp"],
-        "git_revision": measured[-1]["git_revision"],
-        "script_entrypoint": measured[-1]["script_entrypoint"],
-        "pipeline_entrypoint": measured[-1]["pipeline_entrypoint"],
-        "benchmark_method": {
-            "case": "decision",
-            "warmup_runs": config.warmup_runs,
-            "measured_runs": config.measured_runs,
-            "summary": "report mean/min/max/std over measured runs; warmups excluded",
-        },
-        "config": asdict(config.benchmark),
-        "derived": measured[-1]["derived"],
-        "warmup_runs": warmups,
-        "measured_runs": measured,
-        "summary": {
-            "total_seconds": {
-                "mean_seconds": float(total_seconds.mean()),
-                "min_seconds": float(total_seconds.min()),
-                "max_seconds": float(total_seconds.max()),
-                "std_seconds": float(total_seconds.std(ddof=0)),
-            },
-            "memory_profile": {
-                "metric": measured[-1]["memory_profile"]["metric"],
-                "sample_interval_seconds": measured[-1]["memory_profile"]["sample_interval_seconds"],
-                "mean_max_rss_bytes": float(peak_rss_bytes.mean()),
-                "max_max_rss_bytes": int(peak_rss_bytes.max()),
-                "mean_max_rss_gib": float(peak_rss_bytes.mean() / (1024 ** 3)),
-                "max_max_rss_gib": float(peak_rss_bytes.max() / (1024 ** 3)),
-            },
-            "step_timings": step_stats,
-            "checks_stable": checks_stable,
-            "checks_reference": checks_reference,
-        },
-    }
-
-    if markdown_path is not None:
-        _append_decision_benchmark_markdown(Path(markdown_path), result)
-
-    return result
 
 
 def _append_benchmark_markdown(path: Path, result: dict[str, object]) -> None:
@@ -431,8 +350,8 @@ def _append_benchmark_markdown(path: Path, result: dict[str, object]) -> None:
         f"- Total time: `{result['total_seconds']:.3f}s`",
         f"- Config: `{config}`",
         f"- Derived: `{derived}`",
-        f"- Max memory: `{memory_profile['max_rss_gib']:.3f} GiB` "
-        f"(`{memory_profile['max_rss_bytes']}` bytes; "
+        f"- Max memory: `{memory_profile['max_rss']['bytes']}` bytes "
+        f"(`{memory_profile['max_rss']['kib']:.1f} KiB`, `{memory_profile['max_rss']['mib']:.3f} MiB`, `{memory_profile['max_rss']['gib']:.3f} GiB`; "
         f"{memory_profile['metric']}, Δt={memory_profile['sample_interval_seconds']}s)",
         "",
         "| Step | Seconds |",
@@ -444,54 +363,6 @@ def _append_benchmark_markdown(path: Path, result: dict[str, object]) -> None:
         [
             "",
             f"- Checks: `{checks}`",
-            "",
-        ]
-    )
-    with path.open("a", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-
-
-def _append_decision_benchmark_markdown(path: Path, result: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        path.write_text(
-            "# Benchmark Results\n\n"
-            "This file is the canonical benchmark log for the CMIP6 Figure 9 path.\n"
-            "Each benchmark runs the real `scripts/reproduce_fig9.py` entrypoint used by the SLURM job,\n"
-            "with deterministic synthetic data injected only at the data-loading boundary so the reduced case\n"
-            "finishes quickly while preserving the production call chain.\n\n",
-            encoding="utf-8",
-        )
-
-    summary = result["summary"]
-    total = summary["total_seconds"]
-    memory = summary["memory_profile"]
-    step_timings = summary["step_timings"]
-    lines = [
-        f"## Decision Benchmark {result['timestamp']}",
-        "",
-        f"- Git revision: `{result['git_revision']}`",
-        f"- Script entrypoint: `{result['script_entrypoint']}`",
-        f"- Pipeline entrypoint: `{result['pipeline_entrypoint']}`",
-        f"- Method: `{result['benchmark_method']['warmup_runs']} warmup + {result['benchmark_method']['measured_runs']} measured runs` (warmups excluded from summary)",
-        f"- Benchmark case: `reduced Figure 9`",
-        f"- Config: `{result['config']}`",
-        f"- Derived: `{result['derived']}`",
-        f"- Total time summary: mean `{total['mean_seconds']:.3f}s`, min `{total['min_seconds']:.3f}s`, max `{total['max_seconds']:.3f}s`, std `{total['std_seconds']:.3f}s`",
-        f"- Peak memory summary: mean `{memory['mean_max_rss_gib']:.3f} GiB`, max `{memory['max_max_rss_gib']:.3f} GiB` (`{memory['metric']}`, Δt={memory['sample_interval_seconds']}s)",
-        f"- Checks stable across measured runs: `{summary['checks_stable']}`",
-        "",
-        "| Step | Mean (s) | Min (s) | Max (s) | Std (s) |",
-        "| --- | ---: | ---: | ---: | ---: |",
-    ]
-    for step, stats in step_timings.items():
-        lines.append(
-            f"| {step} | {stats['mean_seconds']:.3f} | {stats['min_seconds']:.3f} | {stats['max_seconds']:.3f} | {stats['std_seconds']:.3f} |"
-        )
-    lines.extend(
-        [
-            "",
-            f"- Reference checks: `{summary['checks_reference']}`",
             "",
         ]
     )

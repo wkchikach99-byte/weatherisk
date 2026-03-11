@@ -1,9 +1,10 @@
 # Benchmark Results
 
-This file records benchmark evidence for the CMIP6 Figure 9 pipeline.
-Each run uses the real `scripts/reproduce_fig9.py` entrypoint used by the
+This file is the canonical benchmark log for the CMIP6 Figure 9 path.
+Each benchmark runs the real `scripts/reproduce_fig9.py` entrypoint used by the
 SLURM Figure 9 job, with deterministic synthetic data injected only at the
-data-loading boundary.
+data-loading boundary so the reduced case finishes quickly while preserving the
+production call chain.
 
 ## Canonical Workflow
 
@@ -12,222 +13,14 @@ data-loading boundary.
 - Pipeline entrypoint under test: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
 - Default intent: reduced Figure 9 case that preserves the production call chain while finishing in roughly a minute or less
 - Recorded metrics: total wall time, per-step timings, peak process-tree RSS, and generated figure count
+- Memory is reported in `bytes`, `KiB`, `MiB`, and `GiB`
 
-## Methodology Learnings
+## Notes
 
 - A real script entrypoint is required for multiprocessing benchmarks; heredoc or stdin entrypoints can give misleading results or fail under macOS spawn mode.
 - For the CMIP6 Figure 9 path, Step 3 local MLE remains the primary bottleneck; optimizer cost dominates pair-array assembly once the production likelihood is active.
-- Memory-oriented clustering refactors matter more on larger grids than on tiny synthetic cases, where interpreter and worker overhead can hide the effect.
+- This file now tracks only the active Python-only Figure 9 benchmark workflow.
 
-The benchmark policy changed on 2026-03-09. From that point onward, only the
-medium repeated-run benchmark is treated as decision-grade evidence. Earlier
-one-off runs are kept as historical optimization checkpoints.
-
-## Current Decision Benchmark Baseline
-
-- Benchmark class: `decision benchmark`
-- Protocol: `1 warmup + 5 measured runs`
-- Warmup policy: warmup runs are excluded from the reported summary
-- Medium case: `48 years`, `16x16` grid, `4 workers`
-- Reported statistics: total-time `mean/min/max/std`, per-step `mean/min/max/std`, and peak RSS `mean/max`
-- Stability rule: the numerical check dictionary must stay identical across measured runs
-
-## Decision Benchmark 2026-03-09T19:54:49.439181+00:00
-
-- Git revision: `23b6ceb`
-- Entrypoint: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
-- Config: `{'seed': 12345, 'n_years': 48, 'n_lat': 16, 'n_lon': 16, 'n_workers': 4, 'df': 5.0, 'alpha': 1.0, 'neighbor_radius': 3.0, 'smoothing_radius': 2.0, 'mle_ensemble': 3, 'stl_period': 12}`
-- Derived: `{'n_months': 576, 'n_cells': 256, 'n_valid_cells': 256, 'n_years_complete': 48, 'k_lec': 38, 'k_edc': 20}`
-- Total time summary: mean `9.176s`, min `9.116s`, max `9.227s`, std `0.038s`
-- Peak memory summary: mean `0.757 GiB`, max `0.772 GiB` (`peak_process_tree_rss`, `Δt=0.05s`)
-- Checks stable across measured runs: `True`
-
-| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
-| --- | ---: | ---: | ---: | ---: |
-| _detrend_grid_fast | 0.002 | 0.001 | 0.002 | 0.000 |
-| _monthly_annual_maxima | 0.001 | 0.000 | 0.001 | 0.000 |
-| _compute_frechet_global | 1.022 | 0.999 | 1.066 | 0.024 |
-| _run_local_estimation_cmip6 | 2.304 | 2.286 | 2.338 | 0.018 |
-| _smooth_estimates_cmip6 | 0.003 | 0.002 | 0.003 | 0.000 |
-| _run_clustering_cmip6 | 0.076 | 0.073 | 0.080 | 0.003 |
-| _incluster_reestimate_cmip6 | 5.721 | 5.681 | 5.767 | 0.035 |
-
-- Reference checks: `{'frechet_min': 0.14875993551681177, 'frechet_max': 771.6627392983846, 'labels_edc_sum': 2485, 'est_mean_a': 0.01500266795292907, 'est_mean_b': 0.8624371652491263, 'est_mean_gamma': 0.02906508271908983}`
-
-## Rust Backend A/B Comparison — 2026-03-09
-
-Revision `9f24784`. First Rust integration: PyO3 bindings for `neg_log_likelihood_sum` and LEC matrix.
-The Rust backend is called per-evaluation from Python's L-BFGS-B optimizer.
-
-### Python backend (`WEATHERISK_BACKEND=python`)
-
-- Total time: mean `9.169s`, min `8.834s`, max `9.317s`, std `0.181s`
-- Peak RSS: mean `0.769 GiB`, max `0.783 GiB`
-- Checks stable: `True`
-- Reference checks: `{'frechet_min': 0.14875993551681177, 'frechet_max': 771.6627392983846, 'labels_edc_sum': 2485, 'est_mean_a': 0.01500266795292907, 'est_mean_b': 0.8624371652491263, 'est_mean_gamma': 0.02906508271908983}`
-
-| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
-| --- | ---: | ---: | ---: | ---: |
-| _run_local_estimation_cmip6 | 2.288 | 2.225 | 2.322 | 0.035 |
-| _incluster_reestimate_cmip6 | 5.736 | 5.525 | 5.852 | 0.130 |
-
-### Rust backend (`WEATHERISK_BACKEND=auto`, Rust detected)
-
-- Total time: mean `12.320s`, min `12.106s`, max `12.516s`, std `0.148s`
-- Peak RSS: mean `0.606 GiB`, max `0.618 GiB`
-- Checks stable: `True`
-- Reference checks: `{'frechet_min': 0.14875993551681177, 'frechet_max': 771.6627392983846, 'labels_edc_sum': 2485, 'est_mean_a': 0.015160195138307478, 'est_mean_b': 0.8625245785429787, 'est_mean_gamma': 0.0289673269060139}`
-
-| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
-| --- | ---: | ---: | ---: | ---: |
-| _run_local_estimation_cmip6 | 2.248 | 2.168 | 2.311 | 0.049 |
-| _incluster_reestimate_cmip6 | 8.940 | 8.792 | 9.026 | 0.084 |
-
-### Analysis
-
-- **Memory**: Rust uses 21% less memory (0.606 vs 0.769 GiB) — the LEC matrix avoids materializing a 3D boolean tensor.
-- **Speed regression**: Rust is 34% slower overall. The bottleneck is `_incluster_reestimate_cmip6` (+56%).
-- **Root cause**: PyO3 boundary crossing overhead. The Python L-BFGS-B optimizer calls into Rust ~350 times per cell (7 finite-difference gradient evaluations × ~50 iterations). Each call converts NumPy arrays to Rust slices and back. The per-call FFI cost (~20µs) dominates compared to the ~5µs Python-native NumPy evaluation.
-- **Next step**: Move the entire optimizer loop into Rust to eliminate FFI overhead. The L-BFGS-B solver, objective function, finite-difference gradient, and bounds checking should all run compiled, crossing PyO3 only once per cell.
-
-## Rust nll_with_gradient A/B Comparison — 2026-03-09
-
-Approach: Keep SciPy's Fortran L-BFGS-B but compute NLL + forward-difference
-gradient in a single Rust FFI call (`nll_with_gradient`). This reduces FFI
-crossings from ~4/iteration (1 f + 3 approx_fprime) to 1/iteration. The pure
-Rust L-BFGS-B (`lbfgsb-rs-pure`) was 14× slower than SciPy's Fortran and was
-abandoned.
-
-### Python backend (`WEATHERISK_BACKEND=python`)
-
-- Total time: mean `9.201s`, min `9.144s`, max `9.304s`, std `0.061s`
-- Peak RSS: mean `0.755 GiB`, max `0.763 GiB`
-- Checks stable: `True`
-
-| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
-| --- | ---: | ---: | ---: | ---: |
-| _run_local_estimation_cmip6 | 2.311 | 2.291 | 2.380 | 0.035 |
-| _incluster_reestimate_cmip6 | 5.731 | 5.701 | 5.769 | 0.027 |
-
-### Rust backend (`WEATHERISK_BACKEND=rust`, nll_with_gradient)
-
-- Total time: mean `8.320s`, min `8.274s`, max `8.417s`, std `0.050s`
-- Peak RSS: mean `0.610 GiB`, max `0.616 GiB`
-- Checks stable: `True`
-
-| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
-| --- | ---: | ---: | ---: | ---: |
-| _run_local_estimation_cmip6 | 2.144 | 2.117 | 2.234 | 0.045 |
-| _incluster_reestimate_cmip6 | 5.019 | 5.007 | 5.030 | 0.008 |
-
-### Analysis
-
-- **Total**: Rust is **9.6% faster** (8.320s vs 9.201s).
-- **Incluster**: 12.4% faster (5.019s vs 5.731s) — the biggest bottleneck.
-- **Local MLE**: 7.2% faster (2.144s vs 2.311s).
-- **Memory**: 19.2% less (0.610 vs 0.755 GiB).
-- **vs previous Rust attempt**: The per-call Rust NLL was 34% *slower*; `nll_with_gradient` is 9.6% *faster*. The `lbfgsb-rs-pure` crate was 14× slower than SciPy's Fortran L-BFGS-B in micro-benchmarks.
-
-## Rust Kernel Optimisation — 2026-03-10
-
-Deep optimisation of the inner `pairwise_density_summand` kernel in Rust.
-All changes preserve mathematical equivalence (parity tests pass to 1e-12
-element-wise).
-
-**Optimisations applied:**
-
-1. **CSE on `powf`**: 14 `powf()` calls per element → 2 base powers
-   `z^(1/df)`, all other fractional exponents derived via mul/div.
-2. **Closed-form `t_cdf`**: For integer `df/2` (covers default df=5),
-   replaced iterative `beta_reg` with exact polynomial
-   `I_z(a, 1/2) = 1 − √(1−z) Σ c_j z^j`. 5–8× faster than statrs.
-3. **Fast `t_pdf`**: Precomputed log-coefficient (avoids 2× `ln_gamma`
-   per call). Integer-power decomposition for half-integer exponents
-   (e.g., `u^{-3.5} = 1/(u³√u)`) replaces one `powf` per call.
-4. **Inlined `dtdiff`**: Reuses `t_pdf` values already computed for
-   `dt_m1`/`dt_m2`, eliminating 2 redundant `t_pdf` evaluations.
-5. **Covariance caching**: In `neg_log_likelihood_sum`, detects contiguous
-   (x,y) blocks (from `np.repeat` in pair-building) and computes
-   `cov_fkt_2d` once per spatial pair — 48× reduction for n_sim=48.
-6. **`alpha=1.0` fast path**: Skips `powf(alpha)` in `cov_fkt_2d`
-   when `alpha=1.0` (the pipeline default).
-
-### Micro-benchmark: kernel ns/element
-
-| Metric | Before | After | Speedup |
-| --- | ---: | ---: | ---: |
-| `neg_log_likelihood_sum` µs/call | 3366 | 471 | **7.1×** |
-| Per-element ns | 369 | 52 | **7.1×** |
-| `nll_with_gradient` µs/call | 13700 | 1858 | **7.4×** |
-| NLL/trivial ratio | 742× | 118× | 6.3× more efficient |
-
-### Scaling: full optimization time by cluster size
-
-| Cells | Before | After | Speedup |
-| ---: | ---: | ---: | ---: |
-| 10 | 0.184s | 0.023s | **8.0×** |
-| 20 | 0.496s | 0.087s | **5.7×** |
-| 30 | 1.243s | 0.275s | **4.5×** |
-| 50 | 4.702s | 0.876s | **5.4×** |
-
-### Python backend (`WEATHERISK_BACKEND=python`)
-
-- Total time: mean `9.281s`, min `8.955s`, max `9.506s`, std `0.191s`
-- Peak RSS: mean `0.769 GiB`, max `0.791 GiB`
-- Checks stable: `True`
-
-| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
-| --- | ---: | ---: | ---: | ---: |
-| _run_local_estimation_cmip6 | 2.341 | 2.224 | 2.376 | 0.059 |
-| _incluster_reestimate_cmip6 | 5.740 | 5.571 | 5.858 | 0.113 |
-
-### Rust backend (`WEATHERISK_BACKEND=rust`, optimised kernel)
-
-- Total time: mean `3.270s`, min `3.214s`, max `3.400s`, std `0.070s`
-- Peak RSS: mean `0.600 GiB`, max `0.610 GiB`
-- Checks stable: `True`
-
-| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
-| --- | ---: | ---: | ---: | ---: |
-| _compute_frechet_global | 1.059 | 1.025 | 1.134 | 0.041 |
-| _run_local_estimation_cmip6 | 0.702 | 0.690 | 0.728 | 0.014 |
-| _incluster_reestimate_cmip6 | 1.377 | 1.365 | 1.403 | 0.014 |
-
-### Analysis
-
-- **Total**: Rust is **2.84× faster** than Python (3.270s vs 9.281s, 64.8% reduction).
-- **Incluster**: **4.17× faster** (1.377s vs 5.740s, 76.0% reduction).
-- **Local MLE**: **3.34× faster** (0.702s vs 2.341s, 70.0% reduction).
-- **Memory**: 22% less (0.600 vs 0.769 GiB).
-- **vs previous Rust**: **2.54× faster** than the pre-optimisation Rust (3.270s vs 8.320s).
-- **Bottleneck shift**: `_compute_frechet_global` (GEV fitting, pure SciPy) is now 32% of total time. The NLL kernel is no longer the dominant cost.
-
-## Historical Optimization Checkpoints
-
-The runs below were useful during implementation, but they are one-off
-measurements rather than repeated-run decision benchmarks.
-
-### Memory Optimisation & Scaling Test — 2026-03-10
-
-Applied three memory optimisations to bring peak RSS under 8 GiB for
-the full 18,432-cell CMIP6 grid:
-
-1. **Condensed LEC dissimilarity**: compute the upper-triangle vector
-   directly (both Python and Rust backends), skipping the full n×n
-   matrix allocation.
-2. **Pre-filtered pair expansion**: filter pairs by `max_dist` BEFORE
-   repeating them across `n_sim` years.
-3. **Block-based NLL evaluation**: evaluate the negative log-likelihood
-   in blocks of 5,000 pairs, capping per-call memory regardless of
-   cluster size.
-
-#### Scaling comparison: 16×16 vs 32×32
-
-Both runs: 48 years, 4 workers, Rust backend, 1 warmup + 5 measured.
-
-| Metric | 16×16 (256 cells) | 32×32 (1,024 cells) | Ratio | Expected (linear) |
-| --- | ---: | ---: | ---: | ---: |
-| n_cells | 256 | 1,024 | 4.0× | 4.0× |
 | **Peak RSS** | **0.555 GiB** | **0.596 GiB** | **1.07×** | ~4× if O(n²) |
 | Total time | 11.790s | 43.974s | 3.73× | 4× |
 | _detrend_grid_fast | 6.061s | 24.952s | 4.12× | 4× (O(n)) |
@@ -491,3 +284,45 @@ Both runs: 48 years, 4 workers, Rust backend, 1 warmup + 5 measured.
 | _incluster_reestimate_cmip6 | 2.133 | 2.098 | 2.164 | 0.026 |
 
 - Reference checks: `{'frechet_min': 0.15719810969238618, 'frechet_max': 517.3014620256827, 'labels_edc_sum': 4090, 'est_mean_a': 0.07405666957724144, 'est_mean_b': 6.947762730241841, 'est_mean_gamma': 0.09303462842023175}`
+## Run 2026-03-11T20:50:52.086251+00:00
+
+- Git revision: `225b588`
+- Script entrypoint: `scripts.reproduce_fig9.main`
+- Pipeline entrypoint: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
+- Total time: `4.587s`
+- Config: `{'seed': 12345, 'n_years': 4, 'n_lat': 3, 'n_lon': 3, 'n_workers': 1, 'year_start': 1980, 'dpi': 300, 'generate_plots': False, 'backend': 'python', 'suppress_script_output': True}`
+- Derived: `{'n_months': 48, 'n_cells': 9, 'n_valid_cells': 9, 'n_years_complete': 4, 'k_lec': 3, 'k_edc': 2, 'saved_figure_count': 0}`
+- Max memory: `236666880` bytes (`231120.0 KiB`, `225.703 MiB`, `0.220 GiB`; peak_process_tree_rss, Δt=0.05s)
+
+| Step | Seconds |
+| --- | ---: |
+| _detrend_grid_fast | 0.131 |
+| _monthly_annual_maxima | 0.155 |
+| _compute_frechet_global | 1.081 |
+| _run_local_estimation_cmip6 | 2.253 |
+| _smooth_estimates_cmip6 | 0.000 |
+| _run_clustering_cmip6 | 0.255 |
+| _incluster_reestimate_cmip6 | 0.678 |
+
+- Checks: `{'frechet_min': 0.4039738356016117, 'frechet_max': 16.0, 'labels_edc_sum': 15, 'est_mean_a': 0.11202639737889099, 'est_mean_b': 9.294280877432646, 'est_mean_gamma': 0.2644610756069325}`
+## Run 2026-03-11T20:53:08.449560+00:00
+
+- Git revision: `225b588`
+- Script entrypoint: `scripts.reproduce_fig9.main`
+- Pipeline entrypoint: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
+- Total time: `18.160s`
+- Config: `{'seed': 12345, 'n_years': 12, 'n_lat': 6, 'n_lon': 6, 'n_workers': 4, 'year_start': 1980, 'dpi': 300, 'generate_plots': False, 'backend': 'python', 'suppress_script_output': True}`
+- Derived: `{'n_months': 144, 'n_cells': 36, 'n_valid_cells': 36, 'n_years_complete': 12, 'k_lec': 7, 'k_edc': 9, 'saved_figure_count': 0}`
+- Max memory: `927809536` bytes (`906064.0 KiB`, `884.828 MiB`, `0.864 GiB`; peak_process_tree_rss, Δt=0.05s)
+
+| Step | Seconds |
+| --- | ---: |
+| _detrend_grid_fast | 0.798 |
+| _monthly_annual_maxima | 0.144 |
+| _compute_frechet_global | 3.990 |
+| _run_local_estimation_cmip6 | 10.388 |
+| _smooth_estimates_cmip6 | 0.000 |
+| _run_clustering_cmip6 | 0.275 |
+| _incluster_reestimate_cmip6 | 2.534 |
+
+- Checks: `{'frechet_min': 0.2296057314788301, 'frechet_max': 144.0, 'labels_edc_sum': 162, 'est_mean_a': 0.11799152428727161, 'est_mean_b': 9.744587339675194, 'est_mean_gamma': -0.1480983950616838}`
