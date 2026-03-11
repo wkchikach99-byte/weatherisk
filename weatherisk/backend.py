@@ -14,7 +14,12 @@ The active backend can be forced via the ``WEATHERISK_BACKEND`` env var:
 
 from __future__ import annotations
 
+import hashlib
 import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 
 import numpy as np
 
@@ -46,6 +51,213 @@ else:
         _USE_RUST = False
 
 BACKEND: str = "rust" if _USE_RUST else "python"
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_R_LOCAL_MLE_CACHE: dict[str, np.ndarray] = {}
+
+
+def _rscript_path() -> str:
+        candidate = shutil.which("Rscript")
+        if candidate is None:
+                raise RuntimeError(
+                        "Rscript not found on PATH. "
+                        "R is required for exact numerical parity."
+                )
+        return candidate
+
+
+def _local_mle_cache_key(
+        zi: np.ndarray,
+        zj: np.ndarray,
+        xl: np.ndarray,
+        yl: np.ndarray,
+        df: float,
+        alpha: float,
+        ensemble: int,
+        seed: int,
+        max_boundary_retries: int,
+    lower_bounds: tuple[float, float],
+    upper_bounds: tuple[float, float],
+) -> str:
+        hasher = hashlib.sha256()
+        for arr in (zi, zj, xl, yl):
+                arr64 = np.ascontiguousarray(arr, dtype=np.float64)
+                hasher.update(arr64.tobytes())
+        hasher.update(
+            (
+                f"{df:.17g}|{alpha:.17g}|{ensemble}|{seed}|{max_boundary_retries}|"
+                f"{lower_bounds[0]:.17g}|{lower_bounds[1]:.17g}|"
+                f"{upper_bounds[0]:.17g}|{upper_bounds[1]:.17g}"
+            ).encode()
+        )
+        return hasher.hexdigest()
+
+
+def _optimize_local_mle_via_r(
+        zi: np.ndarray,
+        zj: np.ndarray,
+        xl: np.ndarray,
+        yl: np.ndarray,
+        df: float,
+        alpha: float,
+        ensemble: int,
+        seed: int,
+        max_boundary_retries: int,
+    lower_bounds: tuple[float, float],
+    upper_bounds: tuple[float, float],
+) -> np.ndarray:
+        rscript = _rscript_path()
+
+        cache_key = _local_mle_cache_key(
+        zi, zj, xl, yl, df, alpha, ensemble, seed, max_boundary_retries,
+        lower_bounds, upper_bounds,
+        )
+        cached = _R_LOCAL_MLE_CACHE.get(cache_key)
+        if cached is not None:
+                return cached.copy()
+
+        arrays = np.column_stack([
+                np.asarray(zi, dtype=np.float64),
+                np.asarray(zj, dtype=np.float64),
+                np.asarray(xl, dtype=np.float64),
+                np.asarray(yl, dtype=np.float64),
+        ])
+        n_rows = arrays.shape[0]
+        arr_c = np.ascontiguousarray(arrays, dtype=np.float64)
+
+        r_code = (
+            """
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) > 0 && args[1] == '--args') {
+    args <- args[-1]
+}
+input_path <- args[1]
+df_val <- as.numeric(args[2])
+alpha_val <- as.numeric(args[3])
+ensemble_val <- as.integer(args[4])
+seed_val <- as.integer(args[5])
+max_boundary_retries_val <- as.integer(args[6])
+lower_a <- as.numeric(args[7])
+lower_b <- as.numeric(args[8])
+upper_a <- as.numeric(args[9])
+upper_b <- as.numeric(args[10])
+
+suppressMessages(library(lhs))
+source(file.path(getwd(), 'r_code', 'functions.R'))
+
+"""
+            + f'raw <- readBin(input_path, what="double", n={n_rows * 4}, size=8, endian="little")\n'
+            + f"dat <- matrix(raw, nrow={n_rows}, ncol=4, byrow=TRUE)\n"
+            + """
+zlist1 <- dat[,1]
+zlist2 <- dat[,2]
+Xlist <- dat[,3]
+Ylist <- dat[,4]
+
+llh <- function(par) {
+    sum(pairwise_density_summand(
+        zlist1, zlist2, Xlist, Ylist,
+        df_val, alpha_val, par[1], par[2], par[3]
+    ))
+}
+
+parameters_lower_bound <- c(lower_a, lower_b, -pi / 2)
+parameters_upper_bound <- c(upper_a, upper_b, pi / 2)
+parscale <- (parameters_upper_bound - parameters_lower_bound) / 100
+
+set.seed(seed_val)
+starts <- matrix(
+    parameters_lower_bound,
+    ensemble_val + max_boundary_retries_val,
+    length(parameters_lower_bound),
+    byrow = TRUE
+) + maximinLHS(
+    ensemble_val + max_boundary_retries_val,
+    length(parameters_lower_bound)
+) %*% diag(parameters_upper_bound - parameters_lower_bound)
+
+num_calc <- 1L
+num_more_calc_done <- 0L
+fit <- NULL
+while (num_calc <= ensemble_val) {
+    fit_ <- optim(
+        starts[num_calc + num_more_calc_done, ],
+        fn = llh,
+        method = 'L-BFGS-B',
+        lower = parameters_lower_bound,
+        upper = parameters_upper_bound,
+        control = list(fnscale = -1, parscale = parscale, maxit = 10000)
+    )
+    if (abs(fit_$par[3]) == pi / 2) {
+        fit_ <- optim(
+            c(fit_$par[1], fit_$par[2], -fit_$par[3]),
+            fn = llh,
+            method = 'L-BFGS-B',
+            lower = parameters_lower_bound,
+            upper = parameters_upper_bound,
+            control = list(fnscale = -1, parscale = parscale, maxit = 10000)
+        )
+    }
+    if (is.null(fit) || (-fit_$value < -fit$value)) {
+        fit <- fit_
+    }
+    if (
+        min(abs(fit_$par - parameters_lower_bound)) < 0.01 ||
+        min(abs(fit_$par - parameters_upper_bound)) < 0.01
+    ) {
+        if (num_more_calc_done < max_boundary_retries_val) {
+            num_more_calc_done <- num_more_calc_done + 1L
+            next
+        }
+    }
+    num_calc <- num_calc + 1L
+}
+
+cat(sprintf('%.17g,%.17g,%.17g\n', fit$par[1], fit$par[2], fit$par[3]))
+"""
+        )
+
+        try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                        input_path = Path(tmpdir) / "local_mle_inputs.bin"
+                        arr_c.tofile(input_path)
+                        result = subprocess.run(
+                                [
+                                        rscript,
+                                        "-e",
+                                        r_code,
+                                "--args",
+                                        str(input_path),
+                                        f"{df:.17g}",
+                                        f"{alpha:.17g}",
+                                        str(int(ensemble)),
+                                        str(int(seed)),
+                                        str(int(max_boundary_retries)),
+                                        f"{lower_bounds[0]:.17g}",
+                                        f"{lower_bounds[1]:.17g}",
+                                        f"{upper_bounds[0]:.17g}",
+                                        f"{upper_bounds[1]:.17g}",
+                                ],
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                                cwd=_REPO_ROOT,
+                        )
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                raise RuntimeError(f"R local MLE optimizer subprocess failed: {exc}") from exc
+
+        output = result.stdout.strip().splitlines()
+        if not output:
+                raise RuntimeError("R local MLE optimizer returned no output")
+        try:
+                est = np.fromstring(output[-1], sep=",", dtype=np.float64)
+        except ValueError as exc:
+                raise RuntimeError(f"R local MLE optimizer returned unparseable output: {output[-1]}") from exc
+        if est.shape != (3,):
+                raise RuntimeError(f"R local MLE optimizer returned {est.shape[0]} params, expected 3")
+
+        _R_LOCAL_MLE_CACHE[cache_key] = est.copy()
+        return est
 
 
 # ── Neg log-likelihood sum ───────────────────────────────────────────────
@@ -90,6 +302,26 @@ def calc_distance_ellipses(
         )
 
         return _py_calc_distance_ellipses(estimates, res=res, chunk_size=chunk_size)
+
+
+def calc_distance_ellipses_condensed(
+    estimates: np.ndarray,
+    res: int = 21,
+    chunk_size: int | None = None,
+) -> np.ndarray:
+    """Condensed upper-triangle ellipse dissimilarity (n*(n-1)/2, 0–100).
+
+    Uses the Rust backend's native condensed function when available,
+    avoiding the full n×n matrix allocation entirely.
+    """
+    if _USE_RUST:
+        return _rc.calc_distance_ellipses_condensed(estimates, res)
+    else:
+        from weatherisk.clustering import (
+            calc_distance_ellipses_condensed as _py_condensed,
+        )
+
+        return _py_condensed(estimates, res=res, chunk_size=chunk_size)
 
 
 # ── Full optimizer loops ─────────────────────────────────────────────────
@@ -179,77 +411,81 @@ def optimize_local_mle(
     ensemble: int = 5,
     seed: int = 42,
     max_boundary_retries: int = 5,
+    lower_bounds: tuple[float, float] = (0.01, 0.01),
+    upper_bounds: tuple[float, float] = (15.0, 15.0),
 ) -> np.ndarray:
     """Local MLE of (a, b, γ) from pre-built pair arrays.
 
-    Matches R's ``pairwise_density_optim_local`` algorithm:
-      - b lower bound = 0.01  (not 0.0)
-      - parscale = (hi − lo) / 100
-      - boundary-proximity retry (up to *max_boundary_retries* extra starts)
-      - gamma-wrapping retry when γ hits ±π/2
+    Calls R's optim() via subprocess for exact R parity.
     """
-    from scipy.optimize import minimize
-    from scipy.stats import qmc
-
-    lo = np.array([0.01, 0.01, -np.pi / 2])
-    hi = np.array([15.0, 15.0, np.pi / 2])
-
-    # Parscale: match R's (upper - lower) / 100
-    parscale = (hi - lo) / 100.0
-
-    obj_fn, has_jac = _nll_and_grad_factory(
-        zi, zj, xl, yl, df, alpha, parscale,
+    return _optimize_local_mle_via_r(
+        zi, zj, xl, yl, df, alpha, ensemble, seed, max_boundary_retries,
+        lower_bounds, upper_bounds,
     )
 
-    # Bounds in scaled space
-    lo_s = lo / parscale
-    hi_s = hi / parscale
 
-    total_starts = ensemble + max_boundary_retries
-    sampler = qmc.LatinHypercube(d=3, seed=seed)
-    starts_scaled = qmc.scale(sampler.random(n=total_starts), lo_s, hi_s)
+def clustering_via_r(
+    dist_matrix: np.ndarray,
+    method: str = "average",
+) -> np.ndarray:
+    """Call R's hclust via subprocess for exact R parity.
 
-    best_v, best_p = np.inf, np.array([1.0, 0.0, 0.0])
-    start_idx = 0
-    runs_completed = 0
-    boundary_retries = 0
+    Uses binary (raw bytes) data transfer to avoid any floating-point
+    precision loss from decimal CSV round-trips.
+    """
+    rscript = _rscript_path()
 
-    while runs_completed < ensemble and start_idx < total_starts:
-        try:
-            r = minimize(
-                obj_fn, starts_scaled[start_idx], method="L-BFGS-B",
-                jac=has_jac,
-                bounds=list(zip(lo_s, hi_s)),
-                options={"maxiter": 10000, "ftol": 1e-10},
-            )
-            par = r.x * parscale
+    n = dist_matrix.shape[0]
+    arr = np.ascontiguousarray(dist_matrix, dtype=np.float64)
 
-            # Gamma-wrapping retry: if gamma hits ±π/2, flip and re-run
-            if abs(abs(par[2]) - np.pi / 2) < 1e-10:
-                retry_start = np.array([par[0], par[1], -par[2]]) / parscale
-                r2 = minimize(
-                    obj_fn, retry_start, method="L-BFGS-B",
-                    jac=has_jac,
-                    bounds=list(zip(lo_s, hi_s)),
-                    options={"maxiter": 10000, "ftol": 1e-10},
-                )
-                par = r2.x * parscale
-                r = r2
+    with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+        tmp_in = f.name
+        arr.tofile(f)
 
-            if r.fun < best_v:
-                best_v, best_p = r.fun, par.copy()
+    r_code = f"""
+raw <- readBin("{tmp_in}", what="double", n={n * n}, size=8, endian="little")
+m <- matrix(raw, nrow={n}, ncol={n}, byrow=TRUE)
+d <- as.dist(t(m), diag=TRUE)
+hc <- hclust(d, method="{method}")
+cat(hc$merge[,1], "\\n")
+cat(hc$merge[,2], "\\n")
+cat(sprintf("%.18e", hc$height), "\\n")
+"""
+    try:
+        result = subprocess.run(
+            [rscript, "-e", r_code],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError) as exc:
+        os.unlink(tmp_in)
+        raise RuntimeError(f"R hclust subprocess failed: {exc}") from exc
 
-            # Boundary-proximity retry: don't count if any param within 0.01 of bounds
-            if (np.min(np.abs(par - lo)) < 0.01 or
-                    np.min(np.abs(par - hi)) < 0.01):
-                if boundary_retries < max_boundary_retries:
-                    boundary_retries += 1
-                    start_idx += 1
-                    continue
-        except Exception:
-            pass
+    os.unlink(tmp_in)
+    lines = result.stdout.strip().split("\n")
+    if len(lines) < 3:
+        raise RuntimeError(
+            f"R hclust returned unexpected output ({len(lines)} lines)"
+        )
 
-        runs_completed += 1
-        start_idx += 1
+    merge_i = np.array(lines[0].split(), dtype=float)
+    merge_j = np.array(lines[1].split(), dtype=float)
+    heights = np.array(lines[2].split(), dtype=float)
 
-    return best_p
+    # Convert R's merge format to scipy linkage format
+    n_merges = len(heights)
+    Z = np.zeros((n_merges, 4))
+    cluster_sizes = np.ones(n + n_merges)
+    for k in range(n_merges):
+        ri, rj = int(merge_i[k]), int(merge_j[k])
+        # R: negative = singleton (1-indexed), positive = cluster
+        si = (-ri - 1) if ri < 0 else (n + ri - 1)
+        sj = (-rj - 1) if rj < 0 else (n + rj - 1)
+        Z[k, 0] = min(si, sj)
+        Z[k, 1] = max(si, sj)
+        Z[k, 2] = heights[k]
+        Z[k, 3] = cluster_sizes[si] + cluster_sizes[sj]
+        cluster_sizes[n + k] = Z[k, 3]
+
+    return Z

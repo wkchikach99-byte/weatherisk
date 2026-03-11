@@ -1,0 +1,40 @@
+image: harbor.uni-muenster.de/proxy-docker/library/rust:latest
+
+stages:
+    - build
+    - test
+    - publish
+
+variables:
+    CARGO_REGISTRY_TOKEN: $CARGO_REGISTRY_TOKEN
+
+build:
+    stage: build
+    script:
+        - cargo build --release
+
+test:
+    stage: test
+    script:
+        - cargo test
+
+pages:
+    stage: publish
+    image: harbor.uni-muenster.de/proxy-docker/rustlang/rust:nightly-slim
+    script:
+        - RUSTDOCFLAGS="--enable-index-page -Zunstable-options" cargo +nightly doc --no-deps
+        - mkdir public
+        - cp -r target/doc/* public
+    artifacts:
+        paths:
+            - public
+    only:
+        - master
+
+publish:
+    stage: publish
+    allow_failure: true
+    script:
+        - cargo publish --token $CARGO_REGISTRY_TOKEN
+    only:
+        - master

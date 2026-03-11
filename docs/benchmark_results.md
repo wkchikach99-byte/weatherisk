@@ -193,6 +193,85 @@ element-wise).
 The runs below were useful during implementation, but they are one-off
 measurements rather than repeated-run decision benchmarks.
 
+### Memory Optimisation & Scaling Test — 2026-03-10
+
+Applied three memory optimisations to bring peak RSS under 8 GiB for
+the full 18,432-cell CMIP6 grid:
+
+1. **Condensed LEC dissimilarity**: compute the upper-triangle vector
+   directly (both Python and Rust backends), skipping the full n×n
+   matrix allocation.
+2. **Pre-filtered pair expansion**: filter pairs by `max_dist` BEFORE
+   repeating them across `n_sim` years.
+3. **Block-based NLL evaluation**: evaluate the negative log-likelihood
+   in blocks of 5,000 pairs, capping per-call memory regardless of
+   cluster size.
+
+#### Scaling comparison: 16×16 vs 32×32
+
+Both runs: 48 years, 4 workers, Rust backend, 1 warmup + 5 measured.
+
+| Metric | 16×16 (256 cells) | 32×32 (1,024 cells) | Ratio | Expected (linear) |
+| --- | ---: | ---: | ---: | ---: |
+| n_cells | 256 | 1,024 | 4.0× | 4.0× |
+| **Peak RSS** | **0.555 GiB** | **0.596 GiB** | **1.07×** | ~4× if O(n²) |
+| Total time | 11.790s | 43.974s | 3.73× | 4× |
+| _detrend_grid_fast | 6.061s | 24.952s | 4.12× | 4× (O(n)) |
+| _compute_frechet_global | 1.001s | 3.523s | 3.52× | 4× (O(n)) |
+| _run_local_estimation_cmip6 | 2.570s | 10.546s | 4.10× | 4× (O(n)) |
+| _run_clustering_cmip6 | 0.044s | 0.098s | 2.23× | 4–16× (O(n²)) |
+| _incluster_reestimate_cmip6 | 2.068s | 4.775s | 2.31× | varies |
+
+#### Scaling analysis
+
+- **Memory scales sub-linearly**: 4× cells → only 1.07× memory. The
+  condensed form and block-based NLL prevent quadratic memory growth.
+  The dominant memory consumer is now the Python interpreter and worker
+  processes (~0.5 GiB baseline), not the data arrays.
+- **Compute scales linearly**: Steps 1–4 (per-cell work) show ~4× as
+  expected. Clustering (Step 5) shows ~2.2× because the condensed
+  vector is O(n²) in size but the Rust backend streams pair-by-pair
+  without materialising large intermediates. In-cluster re-estimation
+  (Step 6) shows 2.3× rather than 4× because larger clusters hit the
+  `max_dist` filter, reducing effective pair count.
+- **Extrapolation to 192×96 (18,432 cells)**: With sub-linear memory
+  scaling and the 0.6 GiB baseline, the full grid should peak at
+  approximately 1.5–2.0 GiB — well within the 8 GiB target.
+
+#### 16×16 detail (Rust backend, post-optimisation)
+
+- Total: mean `11.790s`, min `11.513s`, max `12.068s`, std `0.189s`
+- Peak RSS: mean `0.555 GiB`, max `0.559 GiB`
+- Checks stable: `True`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _detrend_grid_fast | 6.061 | 5.836 | 6.216 | 0.137 |
+| _monthly_annual_maxima | 0.002 | 0.000 | 0.005 | 0.002 |
+| _compute_frechet_global | 1.001 | 0.975 | 1.091 | 0.045 |
+| _run_local_estimation_cmip6 | 2.570 | 2.564 | 2.588 | 0.009 |
+| _smooth_estimates_cmip6 | 0.003 | 0.002 | 0.003 | 0.000 |
+| _run_clustering_cmip6 | 0.044 | 0.037 | 0.051 | 0.004 |
+| _incluster_reestimate_cmip6 | 2.068 | 2.035 | 2.100 | 0.023 |
+
+#### 32×32 detail (Rust backend, post-optimisation)
+
+- Total: mean `43.974s`, min `43.381s`, max `44.720s`, std `0.430s`
+- Peak RSS: mean `0.596 GiB`, max `0.605 GiB`
+- Checks stable: `True`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _detrend_grid_fast | 24.952 | 24.479 | 25.320 | 0.275 |
+| _monthly_annual_maxima | 0.001 | 0.001 | 0.001 | 0.000 |
+| _compute_frechet_global | 3.523 | 3.408 | 3.836 | 0.159 |
+| _run_local_estimation_cmip6 | 10.546 | 10.486 | 10.616 | 0.051 |
+| _smooth_estimates_cmip6 | 0.011 | 0.011 | 0.011 | 0.000 |
+| _run_clustering_cmip6 | 0.098 | 0.093 | 0.100 | 0.002 |
+| _incluster_reestimate_cmip6 | 4.775 | 4.766 | 4.793 | 0.009 |
+
+### Previous historical checkpoints
+
 | Revision | Scenario | Config | Total | Peak RSS | Main observation |
 | --- | --- | --- | ---: | ---: | --- |
 | `0bc6035` | pre-improvement baseline | `24y, 8x8, 1 worker` | `5.755s` | n/a | serial baseline before the optimization pass |
@@ -375,3 +454,26 @@ measurements rather than repeated-run decision benchmarks.
 | _incluster_reestimate_cmip6 | 5.533 | 5.488 | 5.605 | 0.049 |
 
 - Reference checks: `{'frechet_min': 0.14875993551681177, 'frechet_max': 771.6627392983846, 'labels_edc_sum': 2485, 'est_mean_a': 0.01500266795292907, 'est_mean_b': 0.8624371652491263, 'est_mean_gamma': 0.02906508271908983}`
+## Decision Benchmark 2026-03-10T16:51:00.918262+00:00
+
+- Git revision: `4cf18b2`
+- Entrypoint: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
+- Method: `1 warmup + 5 measured runs` (warmups excluded from summary)
+- Benchmark case: `medium`
+- Config: `{'seed': 12345, 'n_years': 48, 'n_lat': 16, 'n_lon': 16, 'n_workers': 4, 'df': 5.0, 'alpha': 1.0, 'neighbor_radius': 3.0, 'smoothing_radius': 2.0, 'mle_ensemble': 3, 'stl_period': 12}`
+- Derived: `{'n_months': 576, 'n_cells': 256, 'n_valid_cells': 256, 'n_years_complete': 48, 'k_lec': 33, 'k_edc': 32}`
+- Total time summary: mean `11.051s`, min `10.902s`, max `11.221s`, std `0.132s`
+- Peak memory summary: mean `0.613 GiB`, max `0.617 GiB` (`peak_process_tree_rss`, Δt=0.05s)
+- Checks stable across measured runs: `True`
+
+| Step | Mean (s) | Min (s) | Max (s) | Std (s) |
+| --- | ---: | ---: | ---: | ---: |
+| _detrend_grid_fast | 5.225 | 5.160 | 5.369 | 0.076 |
+| _monthly_annual_maxima | 0.001 | 0.000 | 0.001 | 0.000 |
+| _compute_frechet_global | 1.013 | 0.976 | 1.101 | 0.049 |
+| _run_local_estimation_cmip6 | 2.594 | 2.553 | 2.691 | 0.052 |
+| _smooth_estimates_cmip6 | 0.003 | 0.003 | 0.003 | 0.000 |
+| _run_clustering_cmip6 | 0.040 | 0.036 | 0.043 | 0.003 |
+| _incluster_reestimate_cmip6 | 2.133 | 2.098 | 2.164 | 0.026 |
+
+- Reference checks: `{'frechet_min': 0.15719810969238618, 'frechet_max': 517.3014620256827, 'labels_edc_sum': 4090, 'est_mean_a': 0.07405666957724144, 'est_mean_b': 6.947762730241841, 'est_mean_gamma': 0.09303462842023175}`

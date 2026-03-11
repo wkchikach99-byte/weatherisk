@@ -55,10 +55,15 @@ cd "${WORK_DIR}"
 
 mkdir -p logs
 
-# Load Python
+# Load Python and R
 module purge 2>/dev/null || true
 module load python/3.11.7 2>/dev/null || module load python/3.11 2>/dev/null || \
     module load python/3.10.4 2>/dev/null || true
+
+# Load R (required for MLE optimizer, GEV fitting, and hclust clustering)
+module load r/4.2.2 2>/dev/null || module load r/4.1.3 2>/dev/null || \
+    module load r 2>/dev/null || true
+export R_LIBS_USER=~/R/libs
 
 # Activate venv
 if [ -f "${WORK_DIR}/.venv/bin/activate" ]; then
@@ -66,8 +71,12 @@ if [ -f "${WORK_DIR}/.venv/bin/activate" ]; then
 fi
 
 echo "  Python: $(python3 --version) ($(which python3))"
+echo "  Rscript: $(Rscript --version 2>&1 || echo 'NOT FOUND')"
 echo "  Working dir: ${WORK_DIR}"
 echo ""
+
+# Force pure-Python backend (no Rust)
+export WEATHERISK_BACKEND=python
 
 # Set threading — each MLE worker gets 1 thread to avoid oversubscription
 export OMP_NUM_THREADS=1

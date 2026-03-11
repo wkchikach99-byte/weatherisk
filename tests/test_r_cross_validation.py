@@ -207,11 +207,8 @@ class TestExtremalCoeffConversion:
         ref = pd.read_csv(REF / "ec_to_cov_test_cases.csv")
         for _, row in ref.iterrows():
             py_val = ec_to_cov(row["df"], row["ec"])
-            # Tolerance relaxed to 1e-4: R's pt() and scipy's t.cdf()
-            # use different internal algorithms, giving ~2.6e-5 difference
-            # for low df near ec≈1.
             np.testing.assert_allclose(
-                py_val, row["cov"], atol=1e-4,
+                py_val, row["cov"], atol=1e-14,
                 err_msg=f"ec_to_cov(df={row['df']}, ec={row['ec']})"
             )
 

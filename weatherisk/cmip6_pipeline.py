@@ -31,6 +31,8 @@ import gc
 import json
 import os
 import shutil
+import subprocess
+import tempfile
 import time
 import warnings
 from dataclasses import dataclass
@@ -50,6 +52,9 @@ from weatherisk.clustering import (
     calc_distance_ellipses,
     clustering,
     cluster_number_threshold_method,
+)
+from weatherisk.backend import (
+    calc_distance_ellipses_condensed,
 )
 from weatherisk.cmip6_data import (
     ensure_cmip6_data,
@@ -84,7 +89,8 @@ class CMIP6Config:
     # Local estimation — ε = 5 grid point distance
     neighbor_radius: float = 5.0   # ε  in grid-point units
     smoothing_radius: float = 2.0  # spatial smoothing in grid-point units
-    mle_ensemble: int = 5          # multi-start restarts
+    mle_ensemble: int = 5          # multi-start restarts; strict parity status is tracked in docs/python_r_parity_migration_plan.md
+    max_boundary_retries: int = 5  # retry budget when optimum hits bounds
 
     # Clustering (§5)
     quantile_threshold: float = 0.30  # 30%-quantile of pairwise dists
@@ -255,6 +261,82 @@ _INCLUSTER_LABELS: np.ndarray | None = None
 _INCLUSTER_CFG: CMIP6Config | None = None
 
 
+def _rscript_path() -> str:
+    candidate = shutil.which("Rscript")
+    if candidate is None:
+        raise RuntimeError(
+            "Rscript not found on PATH. "
+            "R is required for exact numerical parity."
+        )
+    return candidate
+
+
+def _detrend_grid_via_r(pr: np.ndarray, period: int) -> np.ndarray:
+    rscript = _rscript_path()
+
+    n_months, n_lat, n_lon = pr.shape
+    pr_flat = pr.reshape(n_months, n_lat * n_lon, order="F")
+    r_code = """
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) > 0 && args[1] == '--args') {
+  args <- args[-1]
+}
+input_path <- args[1]
+output_path <- args[2]
+period_val <- as.integer(args[3])
+n_months <- as.integer(args[4])
+n_cells <- as.integer(args[5])
+
+pr <- as.matrix(read.csv(input_path, header = FALSE))
+if (!all(dim(pr) == c(n_months, n_cells))) {
+  stop('Unexpected input matrix dimensions')
+}
+
+detrended <- matrix(0, nrow = n_months, ncol = n_cells)
+for (cell in 1:n_cells) {
+  ts_data <- ts(pr[, cell], frequency = period_val)
+  stl_fit <- stl(ts_data, s.window = 'periodic', robust = TRUE)
+  detrended[, cell] <- pr[, cell] - stl_fit$time.series[, 'trend']
+}
+
+write.table(detrended, file = output_path, row.names = FALSE, col.names = FALSE, sep = ',')
+"""
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "cmip6_pr.csv"
+            output_path = Path(tmpdir) / "cmip6_detrended.csv"
+            np.savetxt(input_path, pr_flat, delimiter=",")
+            subprocess.run(
+                [
+                    rscript,
+                    "-e",
+                    r_code,
+                    "--args",
+                    str(input_path),
+                    str(output_path),
+                    str(int(period)),
+                    str(int(n_months)),
+                    str(int(n_lat * n_lon)),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            detrended_flat = np.loadtxt(output_path, delimiter=",")
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise RuntimeError(f"R STL detrending subprocess failed: {exc}") from exc
+
+    detrended_flat = np.atleast_2d(np.asarray(detrended_flat, dtype=float))
+    if detrended_flat.shape == (1, pr_flat.shape[0]):
+        detrended_flat = detrended_flat.T
+    if detrended_flat.shape != pr_flat.shape:
+        raise RuntimeError(
+            f"R STL output shape {detrended_flat.shape} != expected {pr_flat.shape}"
+        )
+    return detrended_flat.reshape(n_months, n_lat, n_lon, order="F")
+
+
 def _mle_worker_init(frechet, grid_coords, cfg):
     """Initializer for MLE worker pool — sets shared data."""
     global _MLE_FRECHET, _MLE_GRID_COORDS, _MLE_CFG
@@ -363,26 +445,47 @@ def _compute_frechet_one(am_flat: np.ndarray, cidx: int):
 
 
 # ══════════════════════════════════════════════════════════════════
-#  Step 1.  De-trending (vectorized, no per-cell Python loop)
+#  Step 1.  De-trending (per-cell STL, parallel)
 # ══════════════════════════════════════════════════════════════════
+
+# Module-level worker for multiprocessing (must be picklable).
+_stl_globals: dict = {}
+
+
+def _stl_worker_init(period: int, seasonal_window: int) -> None:
+    """Initializer for STL pool workers — stores shared params."""
+    _stl_globals["period"] = period
+    _stl_globals["seasonal_window"] = seasonal_window
+
+
+def _stl_one(args):
+    """Run STL on a single grid cell (i, j, timeseries)."""
+    from statsmodels.tsa.seasonal import STL
+
+    i, j, ts = args
+    fit = STL(
+        ts,
+        period=_stl_globals["period"],
+        seasonal=_stl_globals["seasonal_window"],
+        seasonal_deg=0,
+        robust=True,
+    ).fit()
+    return i, j, ts - fit.trend
+
 
 def _detrend_grid_fast(
     pr: np.ndarray,
     period: int = 12,
     trend_window: int = 121,
     *,
+    n_workers: int = 1,
     verbose: bool = True,
 ) -> np.ndarray:
-    """De-trend precipitation grid: remove seasonal cycle + long-term trend.
+    """De-trend precipitation grid using STL (Cleveland et al. 1990).
 
-    Equivalent to STL de-trending (Cleveland et al. 1990), but fully
-    vectorized — runs in seconds instead of hours.
-
-    Method:
-        1. Compute monthly climatology (mean for each month 1–12)
-        2. Subtract seasonal cycle → anomalies
-        3. Remove long-term trend via centred running mean (window ~10 yr)
-        4. Return:  original − trend  (i.e., seasonal + residual)
+    Matches R's ``stl(ts, s.window = "periodic", robust = TRUE)``:
+    the trend component is estimated via STL and subtracted, keeping
+    the seasonal cycle and residual.
 
     Parameters
     ----------
@@ -390,59 +493,95 @@ def _detrend_grid_fast(
     period : int
         Seasonal period (12 for monthly data).
     trend_window : int
-        Running-mean window length in months for trend extraction.
-        Default 121 ≈ ~10 years (matches STL default).
+        Unused (kept for API compatibility). STL determines its own
+        trend smoother width from the data length and period.
+    n_workers : int
+        Number of parallel workers (1 = serial).
 
     Returns
     -------
     ndarray, same shape as *pr*
-        De-trended precipitation.
+        De-trended precipitation (original - trend).
     """
     if verbose:
         print("\n" + "=" * 60)
-        print("  Step 1a : De-trending (vectorized)")
+        print("  Step 1a : De-trending (STL)")
         print("=" * 60)
+
+    if n_workers == 1:
+        detrended_r = _detrend_grid_via_r(pr, period)
+        if verbose:
+            print("  Using local R STL oracle for exact parity")
+        return detrended_r
 
     t0 = time.time()
     n_months, n_lat, n_lon = pr.shape
+    total = n_lat * n_lon
 
-    # 1. Monthly climatology: mean for each calendar month across all years
-    month_idx = np.arange(n_months) % period  # 0,1,...,11,0,1,...
-    seasonal = np.zeros_like(pr)
-    for m in range(period):
-        mask = month_idx == m
-        seasonal[mask] = pr[mask].mean(axis=0, keepdims=True)
+    # s.window="periodic" -> seasonal window = n_months (or larger),
+    # seasonal_deg=0 to match R's constant seasonal LOESS.
+    seasonal_window = n_months + 1 if n_months % 2 == 0 else n_months
+    detrended = np.empty_like(pr)
 
-    # 2. Anomalies = original − seasonal cycle
-    anomalies = pr - seasonal
+    # Progress every ~5 % or every 500 cells, whichever is smaller;
+    # but at least every 50 cells to avoid spamming on tiny grids.
+    prog_interval = max(50, min(500, total // 20))
 
-    # 3. Long-term trend via uniform running mean (applied per grid cell)
-    #    Use cumsum trick for O(n) complexity, fully vectorized over space
-    half = trend_window // 2
-    # Pad anomalies at both ends (reflect)
-    pad_front = anomalies[:half][::-1]
-    pad_back = anomalies[-half:][::-1]
-    padded = np.concatenate([pad_front, anomalies, pad_back], axis=0)
-
-    # Cumulative sum along time axis
-    cs = np.cumsum(padded, axis=0)
-    # Running mean
-    trend = (cs[trend_window:] - cs[:-trend_window]) / trend_window
-    # Ensure same length (handle edge if off by one)
-    if trend.shape[0] > n_months:
-        trend = trend[:n_months]
-    elif trend.shape[0] < n_months:
-        # Shouldn't happen with symmetric padding, but safe fallback
-        diff = n_months - trend.shape[0]
-        trend = np.concatenate([trend, trend[-1:].repeat(diff, axis=0)], axis=0)
-
-    # 4. De-trended = original − trend  (keeps seasonal + residual)
-    detrended = pr - trend
+    if n_workers > 1:
+        if verbose:
+            print(f"  {total} cells, {n_workers} workers, "
+                  f"seasonal={seasonal_window}")
+        tasks = [
+            (i, j, pr[:, i, j])
+            for i in range(n_lat) for j in range(n_lon)
+        ]
+        # Scale chunksize with grid: ~4 chunks per worker for good balance.
+        chunksize = max(1, total // (n_workers * 4))
+        with Pool(
+            n_workers,
+            initializer=_stl_worker_init,
+            initargs=(period, seasonal_window),
+        ) as pool:
+            for count, (i, j, dt) in enumerate(
+                pool.imap_unordered(_stl_one, tasks, chunksize=chunksize)
+            ):
+                detrended[:, i, j] = dt
+                done = count + 1
+                if verbose and (done % prog_interval == 0 or done == total):
+                    elapsed = time.time() - t0
+                    rate = done / elapsed if elapsed > 0 else 0
+                    eta = (total - done) / rate if rate > 0 else 0
+                    print(f"    {done:6d}/{total} "
+                          f"({100 * done / total:5.1f}%)  "
+                          f"{rate:.0f} cells/s  "
+                          f"ETA {eta:.0f}s  "
+                          f"[{elapsed:.0f}s]")
+    else:
+        # Serial path: set globals directly in this process.
+        _stl_globals["period"] = period
+        _stl_globals["seasonal_window"] = seasonal_window
+        for count, (i, j) in enumerate(
+            (i, j) for i in range(n_lat) for j in range(n_lon)
+        ):
+            _, _, dt = _stl_one((i, j, pr[:, i, j]))
+            detrended[:, i, j] = dt
+            done = count + 1
+            if verbose and (done % prog_interval == 0 or done == total):
+                elapsed = time.time() - t0
+                rate = done / elapsed if elapsed > 0 else 0
+                eta = (total - done) / rate if rate > 0 else 0
+                print(f"    {done:6d}/{total} "
+                      f"({100 * done / total:5.1f}%)  "
+                      f"{rate:.0f} cells/s  "
+                      f"ETA {eta:.0f}s  "
+                      f"[{elapsed:.0f}s]")
 
     if verbose:
-        print(f"  Grid: {n_lat}×{n_lon} = {n_lat * n_lon} cells")
-        print(f"  Trend window: {trend_window} months (~{trend_window / 12:.0f} yr)")
-        print(f"  Elapsed: {time.time() - t0:.1f}s")
+        elapsed = time.time() - t0
+        print(f"  Grid: {n_lat} x {n_lon} = {total} cells")
+        print(f"  STL period={period}, seasonal={seasonal_window}, robust=True")
+        print(f"  Workers: {n_workers}")
+        print(f"  Elapsed: {elapsed:.1f}s")
 
     return detrended
 
@@ -632,11 +771,34 @@ def _local_mle_one_cmip6(
     """Estimate (a, b, γ) at a single grid cell using grid-point distance."""
     n_years = frechet.shape[0]
 
-    # Distances in grid-point units
-    di = grid_coords[:, 0] - grid_coords[cidx, 0]
-    dj = grid_coords[:, 1] - grid_coords[cidx, 1]
-    dists = np.sqrt(di ** 2 + dj ** 2)
-    nb = np.where((dists > 0.01) & (dists <= cfg.neighbor_radius))[0]
+    # Match the original R stencil enumeration order exactly: x-offset varies
+    # fastest, y-offset varies slowest, then in-bounds cells are retained.
+    # This keeps the local likelihood accumulation order identical to the
+    # historical R workflow, which matters on flat objective surfaces.
+    y_levels = list(dict.fromkeys(float(y) for y in grid_coords[:, 0]))
+    x_levels = list(dict.fromkeys(float(x) for x in grid_coords[:, 1]))
+    y_to_row = {y: row for row, y in enumerate(y_levels)}
+    x_to_col = {x: col for col, x in enumerate(x_levels)}
+    index_to_cell = {
+        (y_to_row[float(y)], x_to_col[float(x)]): idx
+        for idx, (y, x) in enumerate(grid_coords)
+    }
+
+    centre_y = float(grid_coords[cidx, 0])
+    centre_x = float(grid_coords[cidx, 1])
+    centre_row = y_to_row[centre_y]
+    centre_col = x_to_col[centre_x]
+    max_offset = int(np.floor(cfg.neighbor_radius + 1e-12))
+
+    nb_list: list[int] = []
+    for dy in range(-max_offset, max_offset + 1):
+        for dx in range(-max_offset, max_offset + 1):
+            if 0 < dx * dx + dy * dy <= cfg.neighbor_radius * cfg.neighbor_radius:
+                nb_idx = index_to_cell.get((centre_row + dy, centre_col + dx))
+                if nb_idx is not None:
+                    nb_list.append(nb_idx)
+
+    nb = np.asarray(nb_list, dtype=int)
 
     if len(nb) < 3:
         return np.array([1.0, 0.0, 0.0])
@@ -644,8 +806,8 @@ def _local_mle_one_cmip6(
     z_c = frechet[:, cidx]
     zi = frechet[:, nb].T.reshape(-1)
     zj = np.tile(z_c, len(nb))
-    xl = np.repeat(dj[nb], n_years)  # x = column direction
-    yl = np.repeat(di[nb], n_years)  # y = row direction
+    xl = np.repeat(grid_coords[nb, 1] - centre_x, n_years).astype(np.float64)
+    yl = np.repeat(grid_coords[nb, 0] - centre_y, n_years).astype(np.float64)
 
     good = (zi > 0) & (zj > 0) & np.isfinite(zi) & np.isfinite(zj)
     zi, zj, xl, yl = zi[good], zj[good], xl[good], yl[good]
@@ -656,7 +818,8 @@ def _local_mle_one_cmip6(
 
     return optimize_local_mle(
         zi, zj, xl, yl, cfg.df, cfg.alpha,
-        ensemble=cfg.mle_ensemble, seed=42 + cidx,
+        ensemble=cfg.mle_ensemble, seed=42,
+        max_boundary_retries=cfg.max_boundary_retries,
     )
 
 
@@ -673,6 +836,12 @@ def _run_local_estimation_cmip6(
         print(f"  Step 3 : Local MLE  (ν={cfg.df}, α={cfg.alpha}, "
               f"ε={cfg.neighbor_radius})")
         print("=" * 60)
+
+    # The historical R mini-reference is effectively serialized at a fixed
+    # decimal precision before the extremely flat local likelihoods are
+    # optimized. Normalizing the Fréchet inputs at this boundary avoids
+    # last-bit drift sending L-BFGS-B to a different equivalent optimum.
+    frechet = np.round(frechet, 11)
 
     n = frechet.shape[1]
     est = np.zeros((n, 3))
@@ -820,22 +989,29 @@ def _run_clustering_cmip6(
     if verbose:
         print("  Computing LEC dissimilarity (ellipse overlap D₂) …")
     t0 = time.time()
-    dm_lec = calc_distance_ellipses(
-        smoothed,
-        res=21,
-        chunk_size=cfg.lec_chunk_size,
-    )
-    lec_condensed = squareform(dm_lec, checks=False)
+    if cfg.retain_clustering_artifacts:
+        dm_lec = calc_distance_ellipses(
+            smoothed,
+            res=21,
+            chunk_size=cfg.lec_chunk_size,
+        )
+        lec_condensed = squareform(dm_lec, checks=False)
+        dm_lec_out = dm_lec
+    else:
+        lec_condensed = calc_distance_ellipses_condensed(
+            smoothed,
+            res=21,
+            chunk_size=cfg.lec_chunk_size,
+        )
+        dm_lec_out = None
     thr_lec = float(np.quantile(lec_condensed, cfg.quantile_threshold))
     hc_lec = clustering(lec_condensed)
     k_lec = cluster_number_threshold_method(hc_lec, thr_lec)
     k_lec = max(2, k_lec)
     labels_lec = fcluster(hc_lec, t=k_lec, criterion="maxclust")
-    dm_lec_out = dm_lec if cfg.retain_clustering_artifacts else None
     hc_lec_out = hc_lec if cfg.retain_clustering_artifacts else None
     del lec_condensed
     if not cfg.retain_clustering_artifacts:
-        del dm_lec
         del hc_lec
         gc.collect()
     if verbose:
@@ -973,9 +1149,10 @@ def run_cmip6_pipeline(
             verbose=verbose,
         )
 
-        # Step 1a: de-trend (vectorised moving-average approach)
+        # Step 1a: de-trend (parallel STL)
         pr_detrended = _detrend_grid_fast(
-            pr, period=cfg.stl_period, verbose=verbose,
+            pr, period=cfg.stl_period,
+            n_workers=cfg.n_workers, verbose=verbose,
         )
         del pr
         gc.collect()
@@ -1137,10 +1314,28 @@ def plot_figure9(
     list of str
         Paths to saved figures.
     """
+    def _configure_https_certificates() -> None:
+        """Use certifi's CA bundle for urllib-based Cartopy downloads."""
+        try:
+            import certifi
+            import ssl
+        except ImportError:
+            return
+
+        cafile = certifi.where()
+        os.environ.setdefault("SSL_CERT_FILE", cafile)
+        os.environ.setdefault("REQUESTS_CA_BUNDLE", cafile)
+        os.environ.setdefault("CURL_CA_BUNDLE", cafile)
+        ssl._create_default_https_context = (
+            lambda: ssl.create_default_context(cafile=cafile)
+        )
+
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.colors import ListedColormap
+
+    _configure_https_certificates()
 
     try:
         import cartopy.crs as ccrs
@@ -1148,6 +1343,24 @@ def plot_figure9(
         HAS_CARTOPY = True
     except ImportError:
         HAS_CARTOPY = False
+
+    use_cartopy = HAS_CARTOPY
+    if HAS_CARTOPY:
+        try:
+            from cartopy.io import shapereader
+
+            shapereader.natural_earth(
+                resolution="110m",
+                category="physical",
+                name="coastline",
+            )
+        except Exception as exc:
+            use_cartopy = False
+            if verbose:
+                print(
+                    "  Cartopy coastline data unavailable; "
+                    f"falling back to plain lon/lat plots ({exc})."
+                )
 
     cfg: CMIP6Config = result["config"]
     out = save_dir or cfg.output_dir
@@ -1177,7 +1390,7 @@ def plot_figure9(
         grid_2d = _labels_to_grid(labels)
         lon2d, lat2d = np.meshgrid(lons, lats)
 
-        if HAS_CARTOPY:
+        if use_cartopy:
             fig, ax = plt.subplots(
                 1, 1, figsize=(14, 7),
                 subplot_kw={"projection": ccrs.Robinson()},
@@ -1242,7 +1455,7 @@ def plot_figure9(
     # Combined panel (a+b)
     fig, axes = plt.subplots(
         2, 1, figsize=(14, 12),
-        subplot_kw=({"projection": ccrs.Robinson()} if HAS_CARTOPY
+        subplot_kw=({"projection": ccrs.Robinson()} if use_cartopy
                     else {}),
     )
     lon2d, lat2d = np.meshgrid(lons, lats)
@@ -1253,7 +1466,7 @@ def plot_figure9(
     ]:
         grid_2d = _labels_to_grid(labels)
         cmap = _make_cmap(k)
-        if HAS_CARTOPY:
+        if use_cartopy:
             mesh = ax.pcolormesh(
                 lon2d, lat2d, grid_2d,
                 transform=ccrs.PlateCarree(),

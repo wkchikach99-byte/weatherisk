@@ -1,5 +1,18 @@
 # Rust R-Parity Migration Plan
 
+## Scope Note
+
+This document defines a Rust migration strategy.
+It is not the authority for strict constituent-function Python-to-R parity.
+
+For the current Python strict-acceptance work, the only authoritative document
+is:
+
+- `docs/python_r_parity_migration_plan.md`
+
+Any stronger acceptance claim for Python constituent functions must be tracked
+there, not here.
+
 ## Goal
 
 Rebuild the scientifically critical R methodology in Rust as the authoritative implementation layer, expose it through Python bindings, and prove conformance against R with fixture-based tests at each methodological step.
@@ -175,7 +188,7 @@ Legend:
 |---|---|---|---|---|---|---|---|---|---|---|
 | `cov_fkt_2d` | true | true | true | true | true | true | true | true | true | Accepted in unit 2: Rust fixture tests are authoritative; Python tests cover binding and routed covariance calls. |
 | `pairwise_density_summand` | true | true | true | true | true | true | true | true | true | Accepted in unit 2: Rust fixture tests are authoritative; Python tests cover binding and routed density calls. |
-| `pairwise_density_optim_local` | true | false | false | false | false | false | false | false | false | Existing optimizer is not yet accepted as the R-conformance implementation. |
+| `pairwise_density_optim_local` | true | true | false | false | false | true | false | false | false | R fixtures are now frozen, including the exact `maximinLHS(10,3)` start matrix and selected-point outputs, but exact selected-result parity is still unresolved in both the Rust binding and the current Python translation. |
 | `smooth_local_estimates` | false | false | false | false | false | false | false | false | false | Not yet migrated into Rust. |
 | `calc_distance_ellipses` | true | true | false | false | false | false | false | false | false | Rust implementation exists, but parity mode and strict Rust-vs-R fixture acceptance are not finalized. |
 | `clustering` | false | false | false | false | false | false | false | false | false | Rust equivalent not yet implemented. |
@@ -256,6 +269,13 @@ Accepted in this phase so far:
 
 ### Phase 4: Migrate `pairwise_density_optim_local`
 passes: false
+
+Current state:
+
+- Rust local optimizer now matches more of the R control contract: `b >= 0.01`, scaled-space bounds, gamma-wrap retry, and boundary-triggered extra starts.
+- Frozen R artifacts now include the exact `maximinLHS(10,3)` start matrix used by the parity-critical `set.seed(42)` local-estimation path.
+- A Rust selected-point fixture check exists as a diagnostic, but remains non-accepting because exact selected-output parity has not yet been achieved.
+- The same selected-point mismatch is still observable in the current Python translation, so the remaining blocker is not Rust kernel math alone.
 
 ### Phase 5: Migrate post-MLE functions
 passes: false

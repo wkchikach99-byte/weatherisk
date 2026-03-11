@@ -233,6 +233,9 @@ def cov_to_ec(df: float, cov: float) -> float:
 def ec_to_cov(df: float, ec: float) -> float:
     """Invert cov_to_ec via Brent root-finding.
 
+    Uses scipy's brentq with tight tolerance (xtol=1e-15) to find the
+    covariance value whose extremal coefficient equals *ec*.
+
     Parameters
     ----------
     df : float
@@ -245,12 +248,5 @@ def ec_to_cov(df: float, ec: float) -> float:
     float
         Covariance value in [0, 1].
     """
-    if _HAS_RUST_COVARIANCE:
-        if np.isscalar(ec):
-            return float(_rc.ec_to_cov(df, float(ec)))
-        ec_arr = np.asarray(ec, dtype=float)
-        vec = np.vectorize(lambda ec_i: _rc.ec_to_cov(df, float(ec_i)), otypes=[float])
-        return vec(ec_arr)
-
     ec = min(ec, cov_to_ec(df, 0.0))
-    return float(brentq(lambda c: cov_to_ec(df, c) - ec, 0.0, 1.0))
+    return float(brentq(lambda c: cov_to_ec(df, c) - ec, 0.0, 1.0, xtol=1e-15))

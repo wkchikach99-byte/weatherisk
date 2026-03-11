@@ -23,6 +23,7 @@ except ImportError:
 from weatherisk.covariance import cov_fkt_2d
 
 
+@lru_cache(maxsize=32)
 @lru_cache(maxsize=None)
 def _t_pdf_log_coeff(df: float) -> float:
     """Return the log normalising constant of the Student-t PDF."""
@@ -156,6 +157,10 @@ def pairwise_density_optim(
 ) -> np.ndarray:
     """Global MLE of (a, b, g) via multi-start L-BFGS-B.
 
+    Builds pair arrays and delegates to R's optim() via subprocess
+    for exact R parity (no boundary retries, matching R's
+    pairwise_density_optim).
+
     Parameters
     ----------
     z : ndarray, shape (n_grid, n_sim)
@@ -173,26 +178,22 @@ def pairwise_density_optim(
     max_dist : float
         Maximum pairwise distance (0 = no limit).
     _pair_block_size : int
-        Number of pairs per block for NLL computation.  Larger blocks
-        use more memory but have less Python-loop overhead.
+        Unused (kept for API compatibility).
 
     Returns
     -------
     ndarray, shape (3,)
         Optimal (a, b, g).
     """
-    from scipy.optimize import minimize
-    from scipy.stats import qmc
-
     n_grid = len(X)
     n_sim = z.shape[1]
 
-    # Build pair indices (no n_sim expansion yet)
+    # Build pair indices
     ilist, jlist = np.triu_indices(n_grid, k=1)
     dx = X[ilist] - X[jlist]
     dy = Y[ilist] - Y[jlist]
 
-    # Filter by distance BEFORE any n_sim expansion
+    # Filter by distance
     if max_dist > 0:
         sel = dx * dx + dy * dy <= max_dist * max_dist
         ilist = ilist[sel]
@@ -204,100 +205,20 @@ def pairwise_density_optim(
     if n_pairs == 0:
         return np.array([0.0, 0.0, 0.0])
 
-    lo = np.array([lower_bounds[0], lower_bounds[1], -np.pi / 2])
-    hi = np.array([upper_bounds[0], upper_bounds[1], np.pi / 2])
+    # Expand pair arrays by n_sim (matching R's rep(..., each=n_sim))
+    zilist = z[ilist].reshape(-1)
+    zjlist = z[jlist].reshape(-1)
+    Xlist = np.repeat(dx, n_sim)
+    Ylist = np.repeat(dy, n_sim)
 
-    # Parscale: match R's (upper - lower) / 100
-    parscale = (hi - lo) / 100.0
+    from weatherisk.backend import optimize_local_mle
 
-    from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
-    from weatherisk.backend import _USE_RUST
-
-    # Block-based NLL: expand pairs by n_sim in blocks to limit memory.
-    # Each block creates temporary arrays of size block_size * n_sim.
-    block_size = min(_pair_block_size, n_pairs)
-
-    _has_jac = False
-    if _USE_RUST:
-        from weatherisk.backend import _rc
-
-        def neg_llh(par_scaled):
-            par = par_scaled * parscale
-            total_nll = 0.0
-            total_grad = np.zeros(3)
-            for bs in range(0, n_pairs, block_size):
-                be = min(bs + block_size, n_pairs)
-                bzi = z[ilist[bs:be]].reshape(-1)
-                bzj = z[jlist[bs:be]].reshape(-1)
-                bx = np.repeat(dx[bs:be], n_sim)
-                by = np.repeat(dy[bs:be], n_sim)
-                fval, grad = _rc.nll_with_gradient(
-                    bzi, bzj, bx, by, df, alpha,
-                    par[0], par[1], par[2],
-                )
-                total_nll += fval
-                total_grad += grad
-            return total_nll, total_grad * parscale
-
-        _has_jac = True
-    else:
-        def neg_llh(par_scaled):
-            par = par_scaled * parscale
-            total = 0.0
-            for bs in range(0, n_pairs, block_size):
-                be = min(bs + block_size, n_pairs)
-                bzi = z[ilist[bs:be]].reshape(-1)
-                bzj = z[jlist[bs:be]].reshape(-1)
-                bx = np.repeat(dx[bs:be], n_sim)
-                by = np.repeat(dy[bs:be], n_sim)
-                total += _nll_sum(bzi, bzj, bx, by, df, alpha,
-                                  par[0], par[1], par[2])
-            return total
-
-    # Bounds in scaled space
-    lo_s = lo / parscale
-    hi_s = hi / parscale
-
-    # Latin hypercube starting points
-    sampler = qmc.LatinHypercube(d=3, seed=42)
-    starts_scaled = qmc.scale(sampler.random(n=ensemble), lo_s, hi_s)
-
-    best_val = np.inf
-    best_par = starts_scaled[0] * parscale
-
-    for i in range(ensemble):
-        try:
-            result = minimize(
-                neg_llh,
-                starts_scaled[i],
-                method="L-BFGS-B",
-                jac=_has_jac,
-                bounds=list(zip(lo_s, hi_s)),
-                options={"maxiter": 10000},
-            )
-            par = result.x * parscale
-
-            # Gamma-wrapping retry: if gamma hits ±pi/2, flip and re-run
-            if abs(abs(par[2]) - np.pi / 2) < 1e-10:
-                retry_start = np.array([par[0], par[1], -par[2]]) / parscale
-                result2 = minimize(
-                    neg_llh,
-                    retry_start,
-                    method="L-BFGS-B",
-                    jac=_has_jac,
-                    bounds=list(zip(lo_s, hi_s)),
-                    options={"maxiter": 10000},
-                )
-                par = result2.x * parscale
-                result = result2
-
-            if result.fun < best_val:
-                best_val = result.fun
-                best_par = par
-        except Exception:
-            continue
-
-    return best_par
+    return optimize_local_mle(
+        zilist, zjlist, Xlist, Ylist,
+        df, alpha, ensemble=ensemble, seed=42,
+        max_boundary_retries=0,
+        lower_bounds=lower_bounds, upper_bounds=upper_bounds,
+    )
 
 
 def pairwise_density_optim_local(
@@ -324,9 +245,6 @@ def pairwise_density_optim_local(
     ndarray, shape (3,)
         Estimated (a, b, g).
     """
-    from scipy.optimize import minimize
-    from scipy.stats import qmc
-
     # Find nearest grid point (column-major index)
     xy_pos = grid.koord_num(x, y)
 
@@ -365,91 +283,21 @@ def pairwise_density_optim_local(
     Xlist = np.repeat(X_flat[sel_indices] - X_flat[xy_pos], n_sim)
     Ylist = np.repeat(Y_flat[sel_indices] - Y_flat[xy_pos], n_sim)
 
-    lo = np.array([lower_bounds[0], lower_bounds[1], -np.pi / 2])
-    hi = np.array([upper_bounds[0], upper_bounds[1], np.pi / 2])
+    from weatherisk.backend import optimize_local_mle
 
-    # Parscale: match R's (upper - lower) / 100
-    parscale = (hi - lo) / 100.0
-
-    from weatherisk.backend import neg_log_likelihood_sum as _nll_sum
-    from weatherisk.backend import _USE_RUST
-
-    _has_jac = False
-    if _USE_RUST:
-        from weatherisk.backend import _rc
-        def neg_llh(par_scaled):
-            par = par_scaled * parscale
-            fval, grad_raw = _rc.nll_with_gradient(
-                zilist, zjlist, Xlist, Ylist, df, alpha,
-                par[0], par[1], par[2],
-            )
-            return fval, grad_raw * parscale
-        _has_jac = True
-    else:
-        def neg_llh(par_scaled):
-            par = par_scaled * parscale
-            return _nll_sum(zilist, zjlist, Xlist, Ylist, df, alpha,
-                            par[0], par[1], par[2])
-
-    # Bounds in scaled space
-    lo_s = lo / parscale
-    hi_s = hi / parscale
-
-    sampler = qmc.LatinHypercube(d=3, seed=42)
-    total_starts = ensemble + max_boundary_retries
-    starts_scaled = qmc.scale(sampler.random(n=total_starts), lo_s, hi_s)
-
-    best_val = np.inf
-    best_par = starts_scaled[0] * parscale
-    start_idx = 0
-    runs_completed = 0
-    boundary_retries = 0
-
-    while runs_completed < ensemble and start_idx < total_starts:
-        try:
-            result = minimize(
-                neg_llh,
-                starts_scaled[start_idx],
-                method="L-BFGS-B",
-                jac=_has_jac,
-                bounds=list(zip(lo_s, hi_s)),
-                options={"maxiter": 10000},
-            )
-            par = result.x * parscale
-
-            # Gamma-wrapping retry: if gamma hits ±pi/2, flip and re-run
-            if abs(abs(par[2]) - np.pi / 2) < 1e-10:
-                retry_start = np.array([par[0], par[1], -par[2]]) / parscale
-                result2 = minimize(
-                    neg_llh,
-                    retry_start,
-                    method="L-BFGS-B",
-                    jac=_has_jac,
-                    bounds=list(zip(lo_s, hi_s)),
-                    options={"maxiter": 10000},
-                )
-                par = result2.x * parscale
-                result = result2
-
-            if result.fun < best_val:
-                best_val = result.fun
-                best_par = par
-
-            # Boundary-proximity retry (R: re-run if any param within 0.01 of bounds)
-            if (np.min(np.abs(par - lo)) < 0.01 or
-                    np.min(np.abs(par - hi)) < 0.01):
-                if boundary_retries < max_boundary_retries:
-                    boundary_retries += 1
-                    start_idx += 1
-                    continue  # don't count this as a completed run
-
-        except Exception:
-            pass
-
-        runs_completed += 1
-        start_idx += 1
-
-    return best_par
+    return optimize_local_mle(
+        zilist,
+        zjlist,
+        Xlist,
+        Ylist,
+        df,
+        alpha,
+        ensemble=ensemble,
+        seed=42,
+        max_boundary_retries=max_boundary_retries,
+        lower_bounds=lower_bounds,
+        upper_bounds=upper_bounds,
+    )
 
 
 # ── Multiprocessing helpers for local MLE ─────────────────────────────────

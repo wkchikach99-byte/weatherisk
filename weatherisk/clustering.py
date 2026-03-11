@@ -8,7 +8,6 @@ hierarchical agglomerative clustering with threshold-based k.
 from __future__ import annotations
 
 import numpy as np
-from scipy.cluster.hierarchy import linkage
 
 from weatherisk.covariance import cov_fkt_2d
 
@@ -102,6 +101,93 @@ def calc_distance_ellipses(
     return 100.0 * dist_matrix
 
 
+def calc_distance_ellipses_condensed(
+    estimates: np.ndarray,
+    res: int = 21,
+    chunk_size: int | None = None,
+) -> np.ndarray:
+    """Condensed upper-triangle ellipse overlap dissimilarity vector.
+
+    Same algorithm as :func:`calc_distance_ellipses` but outputs the
+    condensed form directly (length ``n*(n-1)/2``), avoiding the
+    full ``(n, n)`` matrix allocation.  This reduces peak memory
+    from ``O(n²)`` float64 to ``O(n²/2)`` float64.
+
+    Parameters
+    ----------
+    estimates : ndarray, shape (n, 3)
+        Local estimates (a, b, g) per grid point.
+    res : int
+        Resolution of the rasterisation grid.
+    chunk_size : int, optional
+        Row-chunk size for the pairwise comparison loop.
+
+    Returns
+    -------
+    ndarray, shape (n*(n-1)//2,)
+        Condensed dissimilarity vector (scipy squareform order), 0–100.
+    """
+    n = estimates.shape[0]
+    n_pairs = n * (n - 1) // 2
+
+    # Build evaluation points (half-circle for symmetry)
+    xs = np.repeat(np.linspace(-1, 1, res), res)
+    ys = np.tile(np.linspace(-1, 1, res), res)
+    mask = ((xs ** 2 + ys ** 2) <= res ** 2) & ((ys > 0) | (xs > 0))
+    xs = xs[mask]
+    ys = ys[mask]
+    n_pts = len(xs)
+
+    # Pre-compute sqrt(Q_i) for each grid point
+    sq = np.empty((n, n_pts))
+    for i in range(n):
+        a_i, b_i, g_i = estimates[i]
+        sg, cg = np.sin(g_i), np.cos(g_i)
+        ap = a_i + b_i
+        if a_i == 0 and ap == 0:
+            sq[i] = np.inf
+            continue
+        qf = (
+            xs * xs * (sg * sg / (a_i * a_i) + cg * cg / (ap * ap))
+            + 2 * xs * ys * sg * cg * (-1.0 / (a_i * a_i) + 1.0 / (ap * ap))
+            + ys * ys * (cg * cg / (a_i * a_i) + sg * sg / (ap * ap))
+        )
+        sq[i] = np.sqrt(np.maximum(qf, 0.0))
+
+    ab = estimates[:, 0] + estimates[:, 1]
+
+    condensed = np.empty(n_pairs)
+    chunk = min(chunk_size or 256, n)
+
+    for i_start in range(0, n, chunk):
+        i_end = min(i_start + chunk, n)
+        ch = i_end - i_start
+
+        mx = np.maximum(ab[i_start:i_end, None], ab[None, :])
+        mx = np.maximum(mx, 1e-300)
+        thr = 1.0 / mx
+
+        sq_chunk = sq[i_start:i_end]
+        mask_i = sq_chunk[:, None, :] < thr[:, :, None]
+        mask_j = sq[None, :, :] < thr[:, :, None]
+
+        inter = (mask_i & mask_j).sum(axis=2).astype(np.float64) + 0.5
+        union = (mask_i | mask_j).sum(axis=2).astype(np.float64) + 0.5
+
+        d = np.where(union == 0.5, 1.0, 1.0 - inter / union)
+
+        # Store only upper triangle into condensed vector
+        for ci in range(ch):
+            i = i_start + ci
+            if i >= n - 1:
+                break
+            k_start = i * n - i * (i + 1) // 2
+            n_j = n - i - 1
+            condensed[k_start : k_start + n_j] = d[ci, i + 1 :]
+
+    return 100.0 * condensed
+
+
 def c_extrcoeff_matrix(
     sim_data: np.ndarray,
     madogram: bool = False,
@@ -175,11 +261,13 @@ def clustering(
     """
     from scipy.spatial.distance import squareform
 
+    from weatherisk.backend import clustering_via_r
+
     if dist_matrix.ndim == 1:
-        condensed = dist_matrix
-    else:
-        condensed = squareform(dist_matrix, checks=False)
-    return linkage(condensed, method=method)
+        # Convert condensed to square for R
+        dist_matrix = squareform(dist_matrix)
+
+    return clustering_via_r(dist_matrix, method=method)
 
 
 def cluster_number_threshold_method(

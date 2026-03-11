@@ -44,7 +44,7 @@ def _patch_fast_cmip6_pipeline(monkeypatch, *, fail_local_once: bool) -> dict[st
         state["load_calls"] += 1
         return pr.copy(), times.copy(), lats.copy(), lons.copy()
 
-    def fake_detrend_grid_fast(pr_in, period=12, verbose=True):
+    def fake_detrend_grid_fast(pr_in, period=12, *, n_workers=1, verbose=True):
         return pr_in.copy()
 
     def fake_monthly_annual_maxima(pr_detrended, times_in, verbose=True):

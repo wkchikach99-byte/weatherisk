@@ -1,12 +1,12 @@
 "parameter","value"
-"resolution",10
-"df_true",5
-"alpha_true",1
-"n_sim",10
-"nrow_grid",10
-"ncol_grid",10
-"n_grid",100
-"locest_ensemble",5
-"locest_abst",4
-"smoothing_dist",2
-"b_end",5
+resolution, 10
+df_true,  5
+alpha_true,  1
+n_sim, 10
+nrow_grid, 10
+ncol_grid, 10
+n_grid,100
+locest_ensemble,  5
+locest_abst,  4
+smoothing_dist,  2
+b_end,  5

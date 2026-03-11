@@ -87,7 +87,8 @@ class PipelineConfig:
     # Local estimation  (§3.2) — normalised-coordinate units
     neighbor_radius: float = 3.0  # ε  neighbourhood for pairwise CL
     smoothing_radius: float = 2.0 # spatial smoothing
-    mle_ensemble: int = 5         # multi-start L-BFGS-B
+    mle_ensemble: int = 5         # multi-start L-BFGS-B; strict parity status is tracked in docs/python_r_parity_migration_plan.md
+    max_boundary_retries: int = 5 # retry budget when optimum hits bounds
 
     # Clustering  (§3.3)
     quantile_threshold: float = 0.30  # 30 %-quantile of pairwise dists
@@ -312,7 +313,9 @@ def _local_mle_one(frechet, cidx, coords, cfg: PipelineConfig):
 
     return optimize_local_mle(
         zi, zj, xl, yl, cfg.df, cfg.alpha,
-        ensemble=cfg.mle_ensemble, seed=42 + cidx,
+        ensemble=cfg.mle_ensemble,
+        seed=42 + cidx,
+        max_boundary_retries=cfg.max_boundary_retries,
     )
 
 

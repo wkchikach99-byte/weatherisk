@@ -1,0 +1,13 @@
+[package]
+name = "lbfgsb-rs-pure"
+version = "0.1.1"
+edition = "2024"
+description = "A safe, idiomatic Rust port of the L-BFGS-B limited-memory quasi-Newton optimization algorithm (v3.0) for bound-constrained numerical optimization."
+license = "BSD-3-Clause"
+readme = "README.md"
+repository = "https://github.com/nholle/lbfgsb-rs"
+homepage = "https://github.com/nholle/lbfgsb-rs"
+keywords = ["optimization", "l-bfgs-b", "lbfgs", "numerical", "scientific"]
+categories = ["algorithms", "mathematics", "science"]
+
+[dependencies]

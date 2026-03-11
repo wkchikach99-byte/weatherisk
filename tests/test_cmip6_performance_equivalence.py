@@ -61,14 +61,12 @@ def _reference_edc_matrix_flat(frechet: np.ndarray) -> np.ndarray:
     for s in range(n_cells):
         ranks[s] = rankdata(frechet[:, s])
 
-    ec = np.zeros((n_cells, n_cells))
+    v_mat = np.zeros((n_cells, n_cells))
     for i in range(n_cells - 1):
         diff = np.abs(ranks[i] - ranks[i + 1:])
         v = diff.mean(axis=1) / (2.0 * (n_years + 1))
-        denom = 1.0 - 2.0 * v
-        denom[denom <= 0] = 1e-12
-        ec[i, i + 1:] = np.minimum(1.0, (1.0 + 2.0 * v) / denom - 1.0)
-    return ec + ec.T
+        v_mat[i, i + 1:] = v
+    return v_mat + v_mat.T
 
 
 def test_pairwise_density_matches_stats_reference_scalar_and_vector():

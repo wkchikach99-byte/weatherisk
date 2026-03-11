@@ -1,4 +1,13 @@
-"""Tests for the R-parity fixes applied to grid, density, and estimation.
+"""Legacy supporting tests for earlier R-parity-related fixes.
+
+Authority note:
+    This module is not an acceptance gate for strict constituent-function
+    Python-to-R parity. The authoritative standard is defined only in
+    `docs/python_r_parity_migration_plan.md`.
+
+    These tests remain useful as regression checks for specific fixes, but a
+    passing result here must not be used to mark a function as passed in the
+    migration-plan matrix.
 
 These tests verify that the following fixes have been correctly implemented:
 1. Grid index convention: koord_num/number_koord use column-major (Fortran) ordering

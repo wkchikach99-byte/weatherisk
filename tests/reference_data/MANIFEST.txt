@@ -1,5 +1,5 @@
 # R Reference Data Manifest
-# Generated: 2026-02-24 19:20:01.539036
+# Generated: 2026-03-11 16:09:43.357814
 # R version: R version 4.5.2 (2025-10-31)
 
 grid_coordinates.csv  —  Grid coordinates, column-major (R order). Cols: flat_index, X, Y
@@ -20,19 +20,28 @@ covariance_matrix_stationary.csv  —  100x100 covariance matrix for stationary 
 covariance_matrix_nonstationary.csv  —  100x100 non-stationary covariance matrix for stripes preset
 madogram_matrix.csv  —  100x100 madogram (nu_ij) matrix from stripes simulation
 extremal_coefficient_matrix.csv  —  100x100 extremal coefficient (theta-1) matrix
+maximin_lhs_10x3_seed42.csv  —  R maximinLHS(10,3) start matrix used by local estimation with set.seed(42)
+local_optimizer_selected_inputs.csv  —  Lossless local-optimizer pair arrays (zi,zj,xl,yl) for the 5 selected grid points
 local_estimates_selected_points.csv  —  Local estimates at 5 grid points (R 1-based), with true values
+local_optimizer_selected_outputs.csv  —  Exact R-selected optimizer outputs and bounds for the 5 selected local-estimation cells
 local_estimates_all.csv  —  Local estimates for all 100 grid points (raw, before smoothing)
 local_estimates_smoothed.csv  —  Smoothed local estimates (smoothing_dist=1)
 ellipse_dissimilarity_matrix.csv  —  100x100 LEC ellipse dissimilarity matrix (x100)
 hclust_lec_details.csv  —  LEC hierarchical clustering: merge indices, heights
 hclust_lec_order.csv  —  LEC hierarchical clustering: leaf order
-clusters_lec.csv  —  LEC cluster assignments (k=22, threshold=q10)
+clusters_lec.csv  —  LEC cluster assignments (k=21, threshold=q10)
 lec_clustering_params.csv  —  LEC clustering parameters: k and q10 threshold
 hclust_saunders_details.csv  —  EDC hierarchical clustering: merge indices, heights
 hclust_saunders_order.csv  —  EDC hierarchical clustering: leaf order
 clusters_saunders.csv  —  Saunders/EDC cluster assignments (k=12, threshold=q30)
 saunders_clustering_params.csv  —  Saunders clustering parameters: k and q30 threshold
 llh_in_clusters_lec.csv  —  Log-likelihood per LEC cluster using mean smoothed estimates
+calc_estimates_in_clusters_lec.csv  —  In-cluster re-estimation results for LEC clusters
+crop_local_estimates_margin0.csv  —  crop_local_estimates(smoothed, margin=0)
+crop_local_estimates_margin1.csv  —  crop_local_estimates(smoothed, margin=1)
+crop_local_estimates_margin2.csv  —  crop_local_estimates(smoothed, margin=2)
+crop_matrix_a_margin1.csv  —  crop_matrix(smoothed[,1], margin=1)
+crop_matrix_a_margin2.csv  —  crop_matrix(smoothed[,1], margin=2)
 dist_helper_test_cases.csv  —  dist_x(x1,x2) and dist_y(y1,y2) helper results
 grid_number_test_cases.csv  —  grid_number(i,j) results for verification (R 1-based)
 number_grid_test_cases.csv  —  number_grid(n) results for verification (R 1-based)

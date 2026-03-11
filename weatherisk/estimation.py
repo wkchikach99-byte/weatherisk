@@ -81,6 +81,68 @@ def smooth_local_estimates(
     return result
 
 
+def crop_matrix(
+    values: np.ndarray,
+    margin: int,
+    grid: Grid,
+) -> np.ndarray:
+    """Crop a grid-shaped parameter vector by removing edge margins.
+
+    Mirrors R's crop_matrix: reshapes the flat vector into the grid
+    matrix (column-major / Fortran order), slices off *margin* rows
+    and columns from each edge, then flattens back (column-major).
+
+    Parameters
+    ----------
+    values : 1-D array of length n_grid
+        Flat parameter values in column-major order.
+    margin : int
+        Number of rows/columns to remove from each edge.
+    grid : Grid
+        Spatial grid (provides nrow, ncol).
+
+    Returns
+    -------
+    1-D array
+        Cropped values, flattened in column-major order.
+    """
+    mat = values.reshape((grid.nrow, grid.ncol), order='F')
+    cropped = mat[margin:grid.nrow - margin, margin:grid.ncol - margin]
+    return cropped.ravel(order='F')
+
+
+def crop_local_estimates(
+    estimates: np.ndarray,
+    margin: int,
+    grid: Grid,
+) -> np.ndarray:
+    """Crop local estimates by removing edge margins from each column.
+
+    Mirrors R's crop_local_estimates: applies crop_matrix to each of
+    the three parameter columns (a, b, g).
+
+    Parameters
+    ----------
+    estimates : ndarray, shape (n_grid, 3)
+        Local estimates (a, b, g) per grid point.
+    margin : int
+        Number of rows/columns to remove from each edge.
+    grid : Grid
+        Spatial grid.
+
+    Returns
+    -------
+    ndarray, shape (n_cropped, 3)
+        Cropped estimates.
+    """
+    if margin == 0:
+        return estimates.copy()
+    a_crop = crop_matrix(estimates[:, 0], margin, grid)
+    b_crop = crop_matrix(estimates[:, 1], margin, grid)
+    g_crop = crop_matrix(estimates[:, 2], margin, grid)
+    return np.column_stack([a_crop, b_crop, g_crop])
+
+
 def calc_estimates_in_clusters(
     sim_data: np.ndarray,
     clusters: np.ndarray,

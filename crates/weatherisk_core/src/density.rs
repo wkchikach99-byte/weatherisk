@@ -48,23 +48,97 @@ pub fn cov_to_ec(df: f64, cov: f64) -> f64 {
     2.0 * t_cdf((1.0 - cov) / scale, df + 1.0)
 }
 
-/// Invert `cov_to_ec` via bisection on [0, 1].
+fn zeroin<F>(mut a: f64, mut b: f64, tol: f64, f: F) -> f64
+where
+    F: Fn(f64) -> f64,
+{
+    let mut fa = f(a);
+    let mut fb = f(b);
+
+    if fa == 0.0 {
+        return a;
+    }
+    if fb == 0.0 {
+        return b;
+    }
+    assert!(fa * fb <= 0.0, "root is not bracketed");
+
+    let mut c = b;
+    let mut fc = fb;
+    let mut d = b - a;
+    let mut e = d;
+    let macheps = f64::EPSILON;
+
+    loop {
+        if (fb > 0.0 && fc > 0.0) || (fb < 0.0 && fc < 0.0) {
+            c = a;
+            fc = fa;
+            d = b - a;
+            e = d;
+        }
+
+        if fc.abs() < fb.abs() {
+            a = b;
+            b = c;
+            c = a;
+            fa = fb;
+            fb = fc;
+            fc = fa;
+        }
+
+        let tol_act = 2.0 * macheps * b.abs() + tol * 0.5;
+        let m = 0.5 * (c - b);
+        if m.abs() <= tol_act || fb == 0.0 {
+            return b;
+        }
+
+        if e.abs() < tol_act || fa.abs() <= fb.abs() {
+            d = m;
+            e = m;
+        } else {
+            let s = fb / fa;
+            let (mut p, mut q) = if a == c {
+                (2.0 * m * s, 1.0 - s)
+            } else {
+                let qv = fa / fc;
+                let r = fb / fc;
+                (
+                    s * (2.0 * m * qv * (qv - r) - (b - a) * (r - 1.0)),
+                    (qv - 1.0) * (r - 1.0) * (s - 1.0),
+                )
+            };
+            if p > 0.0 {
+                q = -q;
+            } else {
+                p = -p;
+            }
+            let s_prev = e;
+            e = d;
+            if 2.0 * p < (3.0 * m * q - (tol_act * q).abs()).min((s_prev * q).abs()) {
+                d = p / q;
+            } else {
+                d = m;
+                e = m;
+            }
+        }
+
+        a = b;
+        fa = fb;
+        if d.abs() > tol_act {
+            b += d;
+        } else if m > 0.0 {
+            b += tol_act;
+        } else {
+            b -= tol_act;
+        }
+        fb = f(b);
+    }
+}
+
+/// Invert `cov_to_ec` with the same historical zeroin tolerance used by R `uniroot`.
 pub fn ec_to_cov(df: f64, ec: f64) -> f64 {
     let ec = ec.min(cov_to_ec(df, 0.0));
-    let mut lo = 0.0_f64;
-    let mut hi = 1.0_f64;
-
-    for _ in 0..100 {
-        let mid = 0.5 * (lo + hi);
-        let f_mid = cov_to_ec(df, mid) - ec;
-        if f_mid > 0.0 {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-    }
-
-    0.5 * (lo + hi)
+    zeroin(0.0, 1.0, f64::EPSILON.sqrt().sqrt(), |c| cov_to_ec(df, c) - ec)
 }
 
 // ── Student-t helpers ────────────────────────────────────────────────────
