@@ -12,6 +12,7 @@ def _patch_fast_cmip6_pipeline(monkeypatch, *, fail_local_once: bool) -> dict[st
         "load_calls": 0,
         "step2_calls": 0,
         "step3_calls": 0,
+        "step5_calls": 0,
     }
     local_failure = {"armed": fail_local_once}
 
@@ -73,6 +74,7 @@ def _patch_fast_cmip6_pipeline(monkeypatch, *, fail_local_once: bool) -> dict[st
         return est + np.array([0.0, 0.05, 0.0])
 
     def fake_run_clustering_cmip6(smoothed, frechet_in, cfg, verbose=True):
+        state["step5_calls"] += 1
         labels_lec = np.array([1, 1, 2, 2], dtype=int)
         labels_edc = np.array([1, 2, 1, 2], dtype=int)
         dm_lec = np.zeros((4, 4), dtype=float)
@@ -89,7 +91,17 @@ def _patch_fast_cmip6_pipeline(monkeypatch, *, fail_local_once: bool) -> dict[st
             "dm_edc": dm_edc if cfg.retain_clustering_artifacts else None,
         }
 
-    def fake_incluster_reestimate_cmip6(frechet_in, grid_coords, labels, cfg, tag, verbose=True):
+    def fake_incluster_reestimate_cmip6(
+        frechet_in,
+        grid_coords,
+        labels,
+        cfg,
+        tag,
+        *,
+        initial_results=None,
+        checkpoint_stage=None,
+        verbose=True,
+    ):
         return {
             int(label): np.array([1.0 + 0.1 * int(label), 0.2, 0.0], dtype=float)
             for label in np.unique(labels)
@@ -125,6 +137,7 @@ def test_cmip6_pipeline_auto_resumes_and_cleans_checkpoints(tmp_path, monkeypatc
     assert state["load_calls"] == 1
     assert state["step2_calls"] == 1
     assert state["step3_calls"] == 1
+    assert state["step5_calls"] == 0
     assert checkpoint_dir.exists()
     assert (checkpoint_dir / "step2.npz").exists()
     assert (checkpoint_dir / "manifest.json").exists()
@@ -134,6 +147,7 @@ def test_cmip6_pipeline_auto_resumes_and_cleans_checkpoints(tmp_path, monkeypatc
     assert state["load_calls"] == 1
     assert state["step2_calls"] == 1
     assert state["step3_calls"] == 2
+    assert state["step5_calls"] == 1
     assert not checkpoint_dir.exists()
     assert (output_dir / "pipeline_results.npz").exists()
     assert result["annual_max"].shape == (2, 2, 2)
@@ -174,3 +188,134 @@ def test_cmip6_pipeline_retains_clustering_artifacts_when_requested(tmp_path, mo
     assert result["dm_edc"].shape == (4, 4)
     assert result["hc_lec"].shape == (3, 4)
     assert result["hc_edc"].shape == (3, 4)
+
+
+def test_cmip6_pipeline_resumes_step6_per_cluster(tmp_path, monkeypatch):
+    state = {
+        "load_calls": 0,
+        "step2_calls": 0,
+        "step3_calls": 0,
+        "step5_calls": 0,
+        "cluster_calls": {},
+    }
+    crash_once = {"armed": True}
+
+    pr = np.ones((24, 2, 2), dtype=float)
+    times = np.arange(
+        np.datetime64("2000-01"),
+        np.datetime64("2002-01"),
+        np.timedelta64(1, "M"),
+    )
+    lats = np.array([-10.0, 10.0], dtype=float)
+    lons = np.array([0.0, 180.0], dtype=float)
+    annual_max = np.array(
+        [
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[1.5, 2.5], [3.5, 4.5]],
+        ],
+        dtype=float,
+    )
+    years = np.array([2000, 2001], dtype=int)
+    frechet = np.array(
+        [
+            [1.0, 2.0, 3.0, 4.0],
+            [1.5, 2.5, 3.5, 4.5],
+        ],
+        dtype=float,
+    )
+    valid_idx = np.array([0, 1, 2, 3], dtype=int)
+
+    def fake_load_monthly_precipitation(*args, **kwargs):
+        state["load_calls"] += 1
+        return pr.copy(), times.copy(), lats.copy(), lons.copy()
+
+    def fake_detrend_grid_fast(pr_in, period=12, *, n_workers=1, verbose=True):
+        return pr_in.copy()
+
+    def fake_monthly_annual_maxima(pr_detrended, times_in, verbose=True):
+        return annual_max.copy(), years.copy()
+
+    def fake_compute_frechet_global(annual_max_in, n_workers=1, verbose=True):
+        state["step2_calls"] += 1
+        return frechet.copy(), valid_idx.copy()
+
+    def fake_run_local_estimation_cmip6(frechet_in, grid_coords, cfg, verbose=True):
+        state["step3_calls"] += 1
+        return np.array(
+            [
+                [1.0, 0.1, 0.0],
+                [1.1, 0.1, 0.0],
+                [1.2, 0.2, 0.1],
+                [1.3, 0.2, 0.1],
+            ],
+            dtype=float,
+        )
+
+    def fake_smooth_estimates_cmip6(est, grid_coords, cfg, verbose=True):
+        return est + np.array([0.0, 0.05, 0.0])
+
+    def fake_run_clustering_cmip6(smoothed, frechet_in, cfg, verbose=True):
+        state["step5_calls"] += 1
+        return {
+            "labels_lec": np.array([1, 1, 2, 2], dtype=int),
+            "k_lec": 2,
+            "hc_lec": None,
+            "dm_lec": None,
+            "labels_edc": np.array([3, 4, 3, 4], dtype=int),
+            "k_edc": 2,
+            "hc_edc": None,
+            "dm_edc": None,
+        }
+
+    def fake_incluster_estimate_one(frechet_in, grid_coords, labels, cfg, cl):
+        state["cluster_calls"][cl] = state["cluster_calls"].get(cl, 0) + 1
+        if cl == 4 and crash_once["armed"]:
+            crash_once["armed"] = False
+            raise RuntimeError("simulated Step 6 crash")
+        return cl, np.array([1.0 + 0.1 * cl, 0.2, 0.0], dtype=float), int(np.sum(labels == cl))
+
+    monkeypatch.setattr(cmip6_pipeline, "load_monthly_precipitation", fake_load_monthly_precipitation)
+    monkeypatch.setattr(cmip6_pipeline, "_detrend_grid_fast", fake_detrend_grid_fast)
+    monkeypatch.setattr(cmip6_pipeline, "_monthly_annual_maxima", fake_monthly_annual_maxima)
+    monkeypatch.setattr(cmip6_pipeline, "_compute_frechet_global", fake_compute_frechet_global)
+    monkeypatch.setattr(cmip6_pipeline, "_run_local_estimation_cmip6", fake_run_local_estimation_cmip6)
+    monkeypatch.setattr(cmip6_pipeline, "_smooth_estimates_cmip6", fake_smooth_estimates_cmip6)
+    monkeypatch.setattr(cmip6_pipeline, "_run_clustering_cmip6", fake_run_clustering_cmip6)
+    monkeypatch.setattr(cmip6_pipeline, "_incluster_estimate_one", fake_incluster_estimate_one)
+
+    output_dir = tmp_path / "cmip6_output"
+    checkpoint_dir = output_dir / "checkpoints"
+    cfg = cmip6_pipeline.CMIP6Config(
+        data_dir=str(tmp_path / "input_data"),
+        output_dir=str(output_dir),
+        checkpoint_dir=str(checkpoint_dir),
+        n_workers=1,
+    )
+
+    with pytest.raises(RuntimeError, match="simulated Step 6 crash"):
+        cmip6_pipeline.run_cmip6_pipeline(cfg, verbose=False)
+
+    assert state["load_calls"] == 1
+    assert state["step2_calls"] == 1
+    assert state["step3_calls"] == 1
+    assert state["step5_calls"] == 1
+    assert (checkpoint_dir / "step5.npz").exists()
+    assert (checkpoint_dir / "step6_lec.npz").exists()
+    assert (checkpoint_dir / "step6_edc.npz").exists()
+
+    result = cmip6_pipeline.run_cmip6_pipeline(cfg, verbose=False)
+
+    assert state["load_calls"] == 1
+    assert state["step2_calls"] == 1
+    assert state["step3_calls"] == 1
+    assert state["step5_calls"] == 1
+    assert state["cluster_calls"][1] == 1
+    assert state["cluster_calls"][2] == 1
+    assert state["cluster_calls"][3] == 1
+    assert state["cluster_calls"][4] == 2
+    assert not checkpoint_dir.exists()
+    assert (output_dir / "pipeline_results.npz").exists()
+    assert result["k_lec"] == 2
+    assert result["k_edc"] == 2
+    assert set(result["incl_lec"]) == {1, 2}
+    assert set(result["incl_edc"]) == {3, 4}

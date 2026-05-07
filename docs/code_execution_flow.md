@@ -163,6 +163,9 @@ The current CMIP6 implementation can checkpoint intermediate stages.
 - `step2.npz`: after GEV and Fréchet transformation
 - `step3.npz`: after local MLE
 - `step4.npz`: after smoothing
+- `step5.npz`: after LEC and EDC clustering
+- `step6_lec.npz`: incremental per-cluster LEC in-cluster re-estimation state
+- `step6_edc.npz`: incremental per-cluster EDC in-cluster re-estimation state
 
 These checkpoints live under `output/cmip6_fig9/checkpoints/` unless `checkpoint_dir` is overridden in `CMIP6Config`. This does not accelerate successful runs directly, but it prevents long reruns after failures or OOM events before the final `pipeline_results.npz` write.
 

@@ -14,6 +14,47 @@ output_json <- args[2]
 
 source("r_code/functions.R")
 
+calc_distance_ellipses_corrected <- function(local_estimates_matrix, res = 21) {
+  xs <- rep(seq(-1, 1, length.out = res), res)
+  ys <- rep(seq(-1, 1, length.out = res), each = res)
+  wh <- which(((xs^2 + ys^2) <= res^2) & (ys > 0) | (xs > 0))
+  xs <- xs[wh]
+  ys <- ys[wh]
+
+  n <- nrow(local_estimates_matrix)
+  dist_matrix <- matrix(0, nrow = n, ncol = n)
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      mx <- max(
+        local_estimates_matrix[i, 1] + local_estimates_matrix[i, 2],
+        local_estimates_matrix[j, 1] + local_estimates_matrix[j, 2]
+      )
+      ell1 <- 1 * (cov_fkt_2d(
+        xs,
+        ys,
+        alpha = 1,
+        a = local_estimates_matrix[i, 1] / mx,
+        b = local_estimates_matrix[i, 2] / mx,
+        g = local_estimates_matrix[i, 3]
+      ) > exp(-1))
+      ell2 <- 1 * (cov_fkt_2d(
+        xs,
+        ys,
+        alpha = 1,
+        a = local_estimates_matrix[j, 1] / mx,
+        b = local_estimates_matrix[j, 2] / mx,
+        g = local_estimates_matrix[j, 3]
+      ) > exp(-1))
+      if (max(sum(ell1), sum(ell2)) == 0) {
+        dist_matrix[i, j] <- 1
+      } else {
+        dist_matrix[i, j] <- 1 - (sum(ell1 * ell2) + 1 / 2) / (sum(ell1 + ell2 - ell1 * ell2) + 1 / 2)
+      }
+    }
+  }
+  100 * (dist_matrix + t(dist_matrix))
+}
+
 read_scalar <- function(df, name) {
   as.numeric(df$value[df$parameter == name][1])
 }
@@ -130,20 +171,29 @@ for (pt in 1:n_grid) {
 }
 
 smoothed <- smooth_local_estimates(full_locest, smoothing_dist)
-ell_dist <- calc_distance_ellipses(smoothed, res = 21)
-hc_lec <- clustering(ell_dist)
-q30_lec <- quantile(ell_dist[upper.tri(ell_dist)], 0.30)
-k_lec <- cluster_number_threshold_method(hc_lec, q30_lec)
-if (k_lec < 2) k_lec <- 2
+ell_dist_raw <- calc_distance_ellipses(smoothed, res = 21)
+ell_dist_corrected <- calc_distance_ellipses_corrected(smoothed, res = 21)
+
+hc_lec_raw <- clustering(ell_dist_raw)
+q30_lec_raw <- quantile(ell_dist_raw[upper.tri(ell_dist_raw)], 0.30)
+k_lec_raw <- cluster_number_threshold_method(hc_lec_raw, q30_lec_raw)
+if (k_lec_raw < 2) k_lec_raw <- 2
+
+hc_lec_corrected <- clustering(ell_dist_corrected)
+q30_lec_corrected <- quantile(ell_dist_corrected[upper.tri(ell_dist_corrected)], 0.30)
+k_lec_corrected <- cluster_number_threshold_method(hc_lec_corrected, q30_lec_corrected)
+if (k_lec_corrected < 2) k_lec_corrected <- 2
 
 result_lines <- c(
   "{",
   sprintf('  "resolution": %d,', resolution),
   sprintf('  "n_years": %d,', n_years),
   sprintf('  "k_edc": %d,', k_edc),
-  sprintf('  "k_lec": %d,', k_lec),
+  sprintf('  "k_lec_raw": %d,', k_lec_raw),
+  sprintf('  "k_lec_corrected": %d,', k_lec_corrected),
   sprintf('  "q30_edc": %.17g,', q30_edc),
-  sprintf('  "q30_lec": %.17g', q30_lec),
+  sprintf('  "q30_lec_raw": %.17g,', q30_lec_raw),
+  sprintf('  "q30_lec_corrected": %.17g', q30_lec_corrected),
   "}"
 )
 writeLines(result_lines, output_json)

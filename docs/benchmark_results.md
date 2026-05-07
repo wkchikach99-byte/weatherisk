@@ -21,6 +21,46 @@ production call chain.
 - For the CMIP6 Figure 9 path, Step 3 local MLE remains the primary bottleneck; optimizer cost dominates pair-array assembly once the production likelihood is active.
 - This file now tracks only the active Python-only Figure 9 benchmark workflow.
 
+## Run 2026-03-11T20:53:08.449560+00:00
+
+- Git revision: `225b588`
+- Script entrypoint: `scripts.reproduce_fig9.main`
+- Pipeline entrypoint: `weatherisk.cmip6_pipeline.run_cmip6_pipeline`
+- Total time: `18.160s`
+- Config: `{'seed': 12345, 'n_years': 12, 'n_lat': 6, 'n_lon': 6, 'n_workers': 4, 'year_start': 1980, 'dpi': 300, 'generate_plots': false, 'backend': 'python', 'suppress_script_output': true}`
+- Derived: `{'n_months': 144, 'n_cells': 36, 'n_valid_cells': 36, 'n_years_complete': 12, 'k_lec': 7, 'k_edc': 9, 'saved_figure_count': 0}`
+- Max memory: `927809536` bytes (`906064.0 KiB`, `884.828 MiB`, `0.864 GiB`; `peak_process_tree_rss`, Δt=0.05s)
+
+| Step | Seconds |
+| --- | ---: |
+| _detrend_grid_fast | 0.798 |
+| _monthly_annual_maxima | 0.144 |
+| _compute_frechet_global | 3.990 |
+| _run_local_estimation_cmip6 | 10.388 |
+| _smooth_estimates_cmip6 | 0.000 |
+| _run_clustering_cmip6 | 0.275 |
+| _incluster_reestimate_cmip6 | 2.534 |
+
+- Checks: `{'frechet_min': 0.2296057314788301, 'frechet_max': 144.0, 'labels_edc_sum': 162, 'est_mean_a': 0.11799152428727161, 'est_mean_b': 9.744587339675194, 'est_mean_gamma': -0.1480983950616838}`
+
+## Python vs R Comparison — Same 6x6 Input
+
+- Comparison harness: `python scripts/compare_fig9_python_r.py --years 12 --lat 6 --lon 6 --workers 4`
+- Input policy: Python and R use the exact same synthetic monthly precipitation field exported from the benchmark generator
+- Python total runtime: `17.924s`
+- Python result: `k_LEC = 7`, `k_EDC = 9`
+- R result: `k_LEC = 7`, `k_EDC = 9`
+- Python `q30_edc` threshold: `0.1346153846153846`
+- R `q30_edc` threshold: `0.1346153846153846`
+- Python `q30_lec` threshold: `85.71428571428572`
+- R `q30_lec` threshold: `80`
+
+Interpretation:
+
+- `q30_edc` and `q30_lec` are the 30%-quantile cut thresholds of the pairwise dissimilarity values used before `cluster_number_threshold_method` turns the dendrogram into `k_EDC` and `k_LEC`.
+- `q30_edc` matches exactly between Python and R on this 6x6 same-input run.
+- `q30_lec` differs numerically because the Python and legacy R LEC dissimilarity implementations are not pixel-identical, but they still produce the same final cluster count on this case: `k_LEC = 7`.
+
 | **Peak RSS** | **0.555 GiB** | **0.596 GiB** | **1.07×** | ~4× if O(n²) |
 | Total time | 11.790s | 43.974s | 3.73× | 4× |
 | _detrend_grid_fast | 6.061s | 24.952s | 4.12× | 4× (O(n)) |

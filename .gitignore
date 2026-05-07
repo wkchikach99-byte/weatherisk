@@ -7,9 +7,42 @@ __pycache__/
 *.egg-info/
 
 .vscode/
-data/netcdf/
+.DS_Store
 
+# Data and outputs (large, not code)
 /data/
 /output/
-/logs/crates/weatherisk_core/target/
+/logs/
+
+# Rust build artifacts
 crates/weatherisk_core/target/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.spl
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*_build.err
+
+# Old paper draft versions (keep only final/ and v18 source)
+docs/software_x/softwarex_paper_v[0-9].tex
+docs/software_x/softwarex_paper_v[0-9].pdf
+docs/software_x/softwarex_paper_v1[0-7].tex
+docs/software_x/softwarex_paper_v1[0-7].pdf
+docs/software_x/softwarex_paper_v13.1.tex
+docs/software_x/softwarex_paper_v13.1.pdf
+docs/software_x/softwarex_paper_v16-final.pdf
+docs/software_x/softwarex_template_official*
+docs/software_x/tectonic
+
+# Copyrighted reference PDFs
+reference_papers/
+
+# Risk paper work-in-progress (not part of this package)
+risk/
+docs/risk_paper/
+docs/software_x/final/tectonic
+docs/software_x/final/figures
