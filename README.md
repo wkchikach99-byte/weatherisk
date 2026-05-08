@@ -188,7 +188,7 @@ Monthly CMIP6 precipitation
   →  Plot Figure 9 maps
 ```
 
-The CMIP6 path also supports checkpoint-and-resume for Steps 2–4 through `output/cmip6_fig9/checkpoints/`.
+The CMIP6 path also supports checkpoint-and-resume through `output/cmip6_fig9/checkpoints/`: full checkpoints after Steps 2–5 and incremental per-cluster checkpoints during Step 6 for both LEC and EDC re-estimation.
 
 **Usage:**
 
@@ -298,6 +298,69 @@ Two methods are implemented:
 
 1. **Ellipse dissimilarity** — Jaccard-like overlap between estimated anisotropy ellipses, followed by hierarchical agglomerative clustering (average linkage).
 2. **Saunders method** — rank-based madogram estimation of pairwise extremal coefficients, converted to a dissimilarity matrix.
+
+## HPC Deployment (AWI *albedo* cluster)
+
+For large-scale publication workloads—such as the full AWI-ESM-1-1-LR T63 grid
+(192 × 96 = 18,432 cells, 156 years: 1850–2005)—the pipeline should be run on
+HPC infrastructure. All SLURM scripts and environment setup files are in `hpc/`.
+
+### Data volume context
+
+A single monthly precipitation variable on the T63 grid spans
+192 × 96 × 156 × 12 = **34,504,704 values** (≈10⁷ per field). Multi-variable
+workflows easily reach 10⁸–10⁹ values. Scaling to a global 0.25° grid increases
+cell count by ~56×; switching from monthly to daily output adds another ~30×—over
+**three orders of magnitude** more data than the CMIP6-class example here.
+
+The pairwise-comparison stage grows **quadratically** in cell count: moving from
+~18,000 cells (T63) to ~10⁶ cells (km-scale) increases the leading-order cost by
+~10⁴. GPU acceleration, sparse graph-based strategies, or approximate nearest-
+neighbour methods will be required for next-generation Earth system simulations.
+
+### SLURM configuration (validated production run, job 42260990)
+
+| Parameter | Value |
+|---|---|
+| Partition | `smp` (shared memory) |
+| Nodes / tasks | 1 / 1 |
+| CPUs per task | 16 |
+| Memory limit | 220 GiB |
+| Wall-time limit | 48 h |
+| Python / R | 3.11.7 / 4.2.2 |
+| Thread control | `OMP/MKL/OPENBLAS_NUM_THREADS=1` |
+
+Thread libraries are forced to single-threaded mode to prevent over-subscription
+when 16 worker processes are active simultaneously.
+
+### Running on albedo
+
+```bash
+# Environment setup (run once)
+bash hpc/setup_albedo.sh
+
+# Submit the full Figure 9 pipeline
+sbatch hpc/run_fig9_clean.slurm
+
+# Check job status
+squeue -u $USER
+
+# Resume from checkpoint (if interrupted)
+weatherisk cmip6 --workers 16 --resume
+```
+
+Each run is tagged with a unique SLURM job ID; all output files are written to
+`output/cmip6_fig9/` and can be traced back to a specific job submission via
+checkpoint files in `output/cmip6_fig9/checkpoints/`.
+
+### Validated result (job 42260990)
+
+- Grid: T63 (18,432 cells), 156 years, completed in ≈4 hours on 16 cores
+- Peak memory: < 2 GiB (well within the 220 GiB allocation)
+- Cluster counts: k_LEC = 21, k_EDC = 142
+- Multi-node execution is left for future work
+
+---
 
 ## Testing
 

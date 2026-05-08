@@ -32,7 +32,6 @@ dependencies = [
     "cartopy>=0.21",
     "h5py>=3.8",
     "statsmodels>=0.14",
-    "dask>=2023.1",
 ]
 
 [project.optional-dependencies]

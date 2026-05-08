@@ -1,4 +1,34 @@
-# Pipeline Data Flow and Bottleneck Analysis
+flowchart LR
+    A[Smoothed estimates] --> B[Build full LEC matrix]
+    A --> C[Build full EDC matrix]
+
+    B --> B1[Big square matrix in RAM]
+    B --> B2[Temporary boolean chunk arrays]
+    B --> B3[Upper triangle copy for threshold]
+    B --> B4[Condensed copy for linkage]
+
+    C --> C1[Big square matrix in RAM]
+    C --> C2[Upper triangle copy for threshold]
+    C --> C3[Condensed copy for linkage]
+
+    B4 --> D[Cluster labels]
+    C3 --> D
+    D --> E[But large arrays may still stay alive]flowchart LR
+    A[Smoothed estimates] --> B[Build full LEC matrix]
+    A --> C[Build full EDC matrix]
+
+    B --> B1[Big square matrix in RAM]
+    B --> B2[Temporary boolean chunk arrays]
+    B --> B3[Upper triangle copy for threshold]
+    B --> B4[Condensed copy for linkage]
+
+    C --> C1[Big square matrix in RAM]
+    C --> C2[Upper triangle copy for threshold]
+    C --> C3[Condensed copy for linkage]
+
+    B4 --> D[Cluster labels]
+    C3 --> D
+    D --> E[But large arrays may still stay alive]# Pipeline Data Flow and Bottleneck Analysis
 
 This note replaces the older pre-optimization bottleneck write-up. It is based on the current code in `weatherisk.cpc_pipeline`, `weatherisk.cmip6_pipeline`, `weatherisk.density`, `weatherisk.clustering`, and the benchmark evidence recorded in `docs/benchmark_results.md`.
 
@@ -129,6 +159,9 @@ Historically, a failed CMIP6 run could lose all progress before `pipeline_result
 - `step2.npz` after Fréchet transformation
 - `step3.npz` after local MLE
 - `step4.npz` after smoothing
+- `step5.npz` after clustering
+- `step6_lec.npz` incrementally during LEC in-cluster re-estimation
+- `step6_edc.npz` incrementally during EDC in-cluster re-estimation
 
 This is not a speed optimization in the strict sense, but it materially reduces wasted cluster time on long HPC runs.
 

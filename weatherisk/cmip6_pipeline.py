@@ -114,7 +114,14 @@ class CMIP6Config:
         return range(self.year_start, self.year_end + 1)
 
 
-_CHECKPOINT_STAGE_ORDER = ("step2", "step3", "step4")
+_CHECKPOINT_STAGE_ORDER = (
+    "step2",
+    "step3",
+    "step4",
+    "step5",
+    "step6_lec",
+    "step6_edc",
+)
 
 
 def _checkpoint_signature(cfg: CMIP6Config) -> dict[str, Any]:
@@ -244,6 +251,65 @@ def _load_checkpoint(cfg: CMIP6Config, *, verbose: bool = True) -> dict[str, Any
 def _npz_scalar(value: np.ndarray, caster: type[int] | type[float] = int) -> int | float:
     """Convert a 0-D npz payload back to a Python scalar."""
     return caster(np.asarray(value).item())
+
+
+def _stage_at_least(stage: str | None, target: str) -> bool:
+    """Return whether a checkpoint stage is at or beyond the target stage."""
+    if stage is None:
+        return False
+    return _CHECKPOINT_STAGE_ORDER.index(stage) >= _CHECKPOINT_STAGE_ORDER.index(target)
+
+
+def _serialize_clustering_checkpoint(clustering_result: dict[str, Any]) -> dict[str, np.ndarray | int]:
+    """Convert Step 5 clustering outputs into an npz-friendly payload."""
+    payload: dict[str, np.ndarray | int] = {
+        "labels_lec": np.asarray(clustering_result["labels_lec"], dtype=int),
+        "k_lec": int(clustering_result["k_lec"]),
+        "labels_edc": np.asarray(clustering_result["labels_edc"], dtype=int),
+        "k_edc": int(clustering_result["k_edc"]),
+    }
+    for key in ("hc_lec", "dm_lec", "hc_edc", "dm_edc"):
+        value = clustering_result.get(key)
+        if value is not None:
+            payload[key] = np.asarray(value)
+    return payload
+
+
+def _deserialize_clustering_checkpoint(payload: dict[str, np.ndarray]) -> dict[str, Any]:
+    """Restore Step 5 clustering outputs from a checkpoint payload."""
+    return {
+        "labels_lec": payload["labels_lec"],
+        "k_lec": _npz_scalar(payload["k_lec"], int),
+        "hc_lec": payload.get("hc_lec"),
+        "dm_lec": payload.get("dm_lec"),
+        "labels_edc": payload["labels_edc"],
+        "k_edc": _npz_scalar(payload["k_edc"], int),
+        "hc_edc": payload.get("hc_edc"),
+        "dm_edc": payload.get("dm_edc"),
+    }
+
+
+def _serialize_incluster_checkpoint(results: dict[int, np.ndarray]) -> dict[str, np.ndarray]:
+    """Convert partial Step 6 cluster estimates into an npz-friendly payload."""
+    cluster_ids = np.array(sorted(results), dtype=int)
+    if cluster_ids.size == 0:
+        estimates = np.empty((0, 3), dtype=float)
+    else:
+        estimates = np.vstack([np.asarray(results[cl], dtype=float) for cl in cluster_ids])
+    return {
+        "cluster_ids": cluster_ids,
+        "estimates": estimates,
+    }
+
+
+def _deserialize_incluster_checkpoint(payload: dict[str, np.ndarray]) -> dict[int, np.ndarray]:
+    """Restore partial Step 6 cluster estimates from a checkpoint payload."""
+    cluster_ids = np.asarray(payload.get("cluster_ids", np.empty(0, dtype=int)), dtype=int)
+    estimates = np.asarray(payload.get("estimates", np.empty((0, 3), dtype=float)), dtype=float)
+    return {
+        int(cluster_id): np.asarray(estimates[index], dtype=float)
+        for index, cluster_id in enumerate(cluster_ids)
+    }
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1064,36 +1130,66 @@ def _incluster_reestimate_cmip6(
     cfg: CMIP6Config,
     tag: str,
     *,
+    initial_results: dict[int, np.ndarray] | None = None,
+    checkpoint_stage: str | None = None,
     verbose: bool = True,
 ) -> dict[int, np.ndarray]:
     """Re-estimate (a, b, γ) per cluster via global pairwise CL MLE."""
     unique_cl = sorted(np.unique(labels))
+    results: dict[int, np.ndarray] = {}
+    if initial_results is not None:
+        results = {
+            int(cluster_id): np.asarray(estimate, dtype=float)
+            for cluster_id, estimate in initial_results.items()
+        }
+    pending_cl = [cluster_id for cluster_id in unique_cl if cluster_id not in results]
+
     if verbose:
         print(f"  {tag}: re-estimating {len(unique_cl)} clusters …")
+        if results:
+            print(
+                f"  {tag}: resuming {len(results)}/{len(unique_cl)} completed "
+                "clusters from checkpoint."
+            )
 
-    results: dict[int, np.ndarray] = {}
+    if not pending_cl:
+        return results
 
-    if cfg.n_workers > 1 and len(unique_cl) > 1:
+    if cfg.n_workers > 1 and len(pending_cl) > 1:
         with Pool(
             cfg.n_workers,
             initializer=_incluster_worker_init,
             initargs=(frechet, grid_coords, labels, cfg),
         ) as pool:
             for cl, est, n_cl in pool.imap_unordered(
-                _incluster_worker, unique_cl, chunksize=1
+                _incluster_worker, pending_cl, chunksize=1
             ):
                 results[cl] = est
+                if checkpoint_stage is not None:
+                    _write_checkpoint(
+                        cfg,
+                        checkpoint_stage,
+                        verbose=False,
+                        **_serialize_incluster_checkpoint(results),
+                    )
                 if verbose:
                     print(f"    cl {cl:3d} ({n_cl:4d} cells)  "
                           f"a={est[0]:.3f}  b={est[1]:.3f}  "
                           f"γ={np.degrees(est[2]):.1f}°",
                           flush=True)
     else:
-        for cl in unique_cl:
+        for cl in pending_cl:
             cl_out, est, n_cl = _incluster_estimate_one(
                 frechet, grid_coords, labels, cfg, cl
             )
             results[cl_out] = est
+            if checkpoint_stage is not None:
+                _write_checkpoint(
+                    cfg,
+                    checkpoint_stage,
+                    verbose=False,
+                    **_serialize_incluster_checkpoint(results),
+                )
             if verbose:
                 print(f"    cl {cl_out:3d} ({n_cl:4d} cells)  "
                       f"a={est[0]:.3f}  b={est[1]:.3f}  "
@@ -1139,6 +1235,7 @@ def run_cmip6_pipeline(
 
     os.makedirs(cfg.output_dir, exist_ok=True)
     checkpoint = _load_checkpoint(cfg, verbose=verbose)
+    checkpoint_stage = checkpoint["stage"] if checkpoint is not None else None
 
     if checkpoint is None:
         # Step 0: Ensure data
@@ -1198,7 +1295,7 @@ def run_cmip6_pipeline(
     grid_coords = _grid_coords(valid_idx, n_lat, n_lon)
 
     # Step 3: Local MLE
-    if checkpoint is not None and checkpoint["stage"] in {"step3", "step4"}:
+    if _stage_at_least(checkpoint_stage, "step3"):
         est = checkpoint["step3"]["estimates"]
     else:
         est = _run_local_estimation_cmip6(
@@ -1207,7 +1304,7 @@ def run_cmip6_pipeline(
         _write_checkpoint(cfg, "step3", verbose=verbose, estimates=est)
 
     # Step 4: Smoothing
-    if checkpoint is not None and checkpoint["stage"] == "step4":
+    if _stage_at_least(checkpoint_stage, "step4"):
         sm = checkpoint["step4"]["smoothed"]
     else:
         sm = _smooth_estimates_cmip6(
@@ -1216,19 +1313,42 @@ def run_cmip6_pipeline(
         _write_checkpoint(cfg, "step4", verbose=verbose, smoothed=sm)
 
     # Step 5: Clustering
-    cl = _run_clustering_cmip6(sm, frechet, cfg, verbose=verbose)
+    if _stage_at_least(checkpoint_stage, "step5"):
+        cl = _deserialize_clustering_checkpoint(checkpoint["step5"])
+    else:
+        cl = _run_clustering_cmip6(sm, frechet, cfg, verbose=verbose)
+        _write_checkpoint(
+            cfg,
+            "step5",
+            verbose=verbose,
+            **_serialize_clustering_checkpoint(cl),
+        )
 
     # Step 6: In-cluster re-estimation
     if verbose:
         print("\n" + "=" * 60)
         print("  Step 6 : In-cluster re-estimation")
         print("=" * 60)
+    lec_resume = (
+        _deserialize_incluster_checkpoint(checkpoint["step6_lec"])
+        if _stage_at_least(checkpoint_stage, "step6_lec")
+        else None
+    )
     incl_lec = _incluster_reestimate_cmip6(
         frechet, grid_coords, cl["labels_lec"], cfg, "LEC",
+        initial_results=lec_resume,
+        checkpoint_stage="step6_lec",
         verbose=verbose,
+    )
+    edc_resume = (
+        _deserialize_incluster_checkpoint(checkpoint["step6_edc"])
+        if _stage_at_least(checkpoint_stage, "step6_edc")
+        else None
     )
     incl_edc = _incluster_reestimate_cmip6(
         frechet, grid_coords, cl["labels_edc"], cfg, "EDC",
+        initial_results=edc_resume,
+        checkpoint_stage="step6_edc",
         verbose=verbose,
     )
 
