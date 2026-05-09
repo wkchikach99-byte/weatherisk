@@ -1,0 +1,62 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "weatherisk: A Python Package for Spatial Clustering of Climate Extremes via Max-Stable Processes"
+version: 0.1.0
+date-released: 2026-05-07
+license: MIT
+
+authors:
+  - family-names: Kchikach
+    given-names: Widad
+    email: widad.kchikach@awi.de
+    affiliation: "Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research, Bremerhaven, Germany"
+    orcid: ""
+  - family-names: Dickhaus
+    given-names: Thorsten
+    affiliation: "University of Bremen, Bremen, Germany"
+  - family-names: Lohmann
+    given-names: Gerrit
+    affiliation: "Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research, Bremerhaven, Germany"
+
+abstract: >
+  weatherisk is an open-source Python package for identifying regions of
+  homogeneous extremal dependence in gridded climate-model output. The package
+  implements a complete analysis pipeline: seasonal-trend decomposition (STL)
+  removes long-term trends from raw monthly fields; annual block maxima are
+  extracted and fitted with generalised extreme-value (GEV) distributions;
+  marginals are transformed to unit Fréchet scale and local spatial-dependence
+  parameters are estimated before grid cells are partitioned into coherent
+  regions. Two clustering schemes are supported — Local Estimates Clustering
+  (LEC) and Extremal Dependence Clustering (EDC) — each validated against an
+  established R reference implementation.
+
+keywords:
+  - spatial extremes
+  - max-stable process
+  - spatial clustering
+  - extremal dependence
+  - climate risk
+  - Python
+
+repository-code: "https://github.com/wkchikach99-byte/weatherisk"
+
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20069739"
+    description: "Zenodo archived release v0.1.0"
+
+references:
+  - type: article
+    authors:
+      - family-names: Contzen
+        given-names: J.
+      - family-names: Dickhaus
+        given-names: T.
+      - family-names: Lohmann
+        given-names: G.
+    title: "Regionalization approaches for the spatial analysis of extremal dependence"
+    journal: "Extremes"
+    volume: 28
+    year: 2025
+    pages: "713–737"
+    doi: "10.1007/s10687-025-00519-2"

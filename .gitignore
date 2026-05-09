@@ -46,3 +46,34 @@ risk/
 docs/risk_paper/
 docs/software_x/final/tectonic
 docs/software_x/final/figures
+
+# Internal/personal files — not for public repo
+AGENTS.md
+questions.md
+meeting_notes/
+texput.log
+.tmp_benchmark_head
+
+# Internal docs — migration plans, dev notes
+docs/methodology*.docx
+docs/benchmark_results.md
+docs/pipeline_bottleneck_analysis.md
+docs/python_r_parity_migration_plan.md
+docs/rust_r_parity_migration_plan.md
+
+# Internal SoftwareX working files
+docs/software_x/AGENTS.md
+docs/software_x/fig9_parity_progress*.md
+docs/software_x/fig9_validation_report.*
+docs/software_x/fig9_validation_summary.md
+docs/software_x/softwarex_paper_v18.*
+docs/software_x/softwarex_paper_v19.*
+docs/software_x/%OUTDIR%/
+docs/software_x/softwarex_paper.*
+
+# Development/debug scripts (underscore prefix)
+scripts/_*.py
+scripts/_*.R
+
+# PhD thesis draft
+docs/phd_thesis/

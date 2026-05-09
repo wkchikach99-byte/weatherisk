@@ -10,9 +10,18 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Karl J."},
+    {name = "Widad Kchikach", email = "widad.kchikach@awi.de"},
+    {name = "Thorsten Dickhaus"},
+    {name = "Gerrit Lohmann"},
 ]
 keywords = ["climate", "risk", "extreme-value", "max-stable", "clustering"]
+
+[project.urls]
+Homepage = "https://github.com/wkchikach99-byte/weatherisk"
+Repository = "https://github.com/wkchikach99-byte/weatherisk"
+"Bug Tracker" = "https://github.com/wkchikach99-byte/weatherisk/issues"
+"Zenodo DOI" = "https://doi.org/10.5281/zenodo.20069739"
+
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
