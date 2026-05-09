@@ -99,3 +99,13 @@ docs/software_x/final/softwarex_paper_v19.tex
 # Internal working docs
 docs/code_execution_flow.md
 docs/methodology_notes.md
+
+# Risk work (not part of public package)
+weatherisk/risk_pipeline.py
+weatherisk/koch_risk.py
+tests/test_risk_pipeline.py
+scripts/cluster_risk_maps.py
+scripts/risk_decomposition*.py
+scripts/plot_risk*.py
+scripts/investigate_risk_metrics.py
+scripts/validate_es.py

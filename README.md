@@ -54,22 +54,13 @@ weatherisk validate --resolution 10 --n-sim 20 --seed 42
 
 ## Command Status
 
-The current CLI has five subcommands, but they are not all at the same maturity level.
+The CLI provides three subcommands.
 
 | Command | Status | Actual entrypoint | Notes |
 |--------|--------|-------------------|-------|
 | `weatherisk validate` | Implemented | `weatherisk.pipeline.run_pipeline` | Lightweight synthetic sanity check |
 | `weatherisk maps` | Implemented | `weatherisk.cpc_pipeline.run_cpc_pipeline` | Main CPC real-data pipeline with risk maps |
 | `weatherisk cmip6` | Implemented | `weatherisk.cmip6_pipeline.run_cmip6_pipeline` | Figure 9 reproduction path |
-| `weatherisk risk-pipeline` | Implemented | `weatherisk.risk_pipeline` helpers | Post-process precomputed risk CSVs |
-| `weatherisk risk` | Placeholder | `weatherisk.cli.risk` | Accepts arguments but exits with “Not yet implemented for real data” |
-
-## Documentation Guide
-
-- `docs/code_execution_flow.md`: function-level execution flow for each implemented pipeline
-- `docs/pipeline_bottleneck_analysis.md`: current bottlenecks, split by CMIP6 and CPC paths
-- `docs/methodology_notes.md`: methodological interpretation notes for the CPC maps pipeline
-- `docs/benchmark_results.md`: canonical benchmark log and methodology notes for the reduced Figure 9 benchmark path
 
 ## Pipeline Flows
 
@@ -198,27 +189,6 @@ weatherisk cmip6 --workers 16
 weatherisk cmip6 --data-dir /pool/data/CMIP6/.../pr/gn/
 ```
 
-### Flow 5: Risk-Map Post-Processing (`weatherisk risk-pipeline`)
-
-This path does not fit max-stable models. It post-processes an already computed risk grid.
-
-```
-CSV with lat / lon / VaR_95 / ES_95
-  →  Reshape to 2-D grid
-  →  Gaussian smoothing
-  →  Quantile banding
-  →  Connected-component labeling
-  →  Merge tiny regions
-  →  Sequential relabeling
-  →  Per-region summary statistics
-```
-
-**Usage:**
-
-```bash
-weatherisk risk-pipeline --csv data/risk_map_grid.csv --bands 6 --sigma 0.8
-```
-
 ## Library-Only Scalable Helpers
 
 `weatherisk.scalable` contains coarse-grid proxy helpers such as `downsample_estimates()` and `propagate_cluster_labels()`. These are available for experimentation, but the current CLI pipelines do not call them by default.
@@ -236,8 +206,6 @@ weatherisk risk-pipeline --csv data/risk_map_grid.csv --bands 6 --sigma 0.8
 | `estimation` | Spatial smoothing of local estimates (angular wrapping for γ); in-cluster re-estimation with average log-likelihood computation |
 | `clustering` | Ellipse-overlap dissimilarity (`calc_distance_ellipses`); madogram-based Saunders method (`c_extrcoeff_matrix`, column-major flatten); hierarchical clustering; threshold-based *k* selection |
 | `extremes` | Block-maxima extraction, GEV fitting, Fréchet transform |
-| `risk` | VaR, ES, per-cluster risk aggregation |
-| `risk_pipeline` | Risk-map loading, quantile banding, connected-component clustering, region statistics |
 | `cpc_pipeline` | End-to-end CPC real-data pipeline: load CPC files → GEV → Fréchet → LEC/EDC clustering → risk → Cartopy maps |
 | `map_plotting` | Filled-region Cartopy maps (pcolormesh): cluster maps, parameter fields, risk choropleths, summary panels |
 | `gdp` | Gridded GDP exposure loading (Kummu et al. 2018), regridding to pipeline grid, cell-level extraction |
@@ -246,7 +214,7 @@ weatherisk risk-pipeline --csv data/risk_map_grid.csv --bands 6 --sigma 0.8
 | `parameters` | Named parameter presets (`stripes`, `bigsmall`, `rotate`) as dataclasses |
 | `plotting` | Heatmaps, cluster maps, dendrograms, choropleth, bar charts (synthetic data) |
 | `pipeline` | Synthetic orchestration: lightweight validation (`run_pipeline`) and full non-stationary study (`run_nonstationary_pipeline`) |
-| `cli` | Click-based CLI entry point with `validate`, `maps`, `cmip6`, `risk-pipeline`, and placeholder `risk` |
+| `cli` | Click-based CLI entry point with `validate`, `maps`, and `cmip6` |
 | `io` | CSV, NumPy, and RDS I/O helpers |
 
 ## Parameter Presets

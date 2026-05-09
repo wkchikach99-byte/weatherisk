@@ -2,8 +2,8 @@
 
 Provides the `weatherisk` CLI with subcommands:
 - validate: run the method validation flow on synthetic data
-- risk: run the real-data risk analysis flow
-- risk-pipeline: lightweight post-processing of pre-computed risk maps
+- maps: run the CPC real-data pipeline
+- cmip6: run the CMIP6 Figure 9 reproduction pipeline
 """
 
 from __future__ import annotations
@@ -40,69 +40,6 @@ def validate(preset: str, resolution: int, n_sim: int, seed: int, output_dir: st
     )
     n_clusters = len(set(result["clusters"]))
     click.echo(f"Done. Found {n_clusters} clusters. Results saved to {output_dir}")
-
-
-@main.command()
-@click.option("--netcdf", "netcdf_path", default=None, help="Path to NetCDF file.")
-@click.option("--hazard", default="heat", help="Hazard type (heat|cold).")
-@click.option("-k", default=25, help="Target number of clusters.")
-@click.option("--workers", default=1, help="Number of parallel workers.")
-@click.option("--output-dir", default="output/risk", help="Output directory.")
-def risk(netcdf_path: str | None, hazard: str, k: int, workers: int, output_dir: str) -> None:
-    """Flow 2: Real-data risk analysis."""
-    click.echo(f"Risk analysis: hazard={hazard}, k={k}, workers={workers}")
-    if netcdf_path is None:
-        click.echo("Error: --netcdf path is required.", err=True)
-        raise SystemExit(1)
-    click.echo("Not yet implemented for real data. Use 'validate' for synthetic.")
-
-
-@main.command(name="risk-pipeline")
-@click.option("--csv", "csv_path", default="data/risk_map_grid.csv", help="Path to risk map CSV.")
-@click.option("--bands", default=6, help="Number of ES quantile bands.")
-@click.option("--sigma", default=0.8, help="Gaussian smoothing sigma.")
-@click.option("--min-patch", default=30, help="Minimum patch size.")
-@click.option("--output-dir", default="output/risk_pipeline", help="Output directory.")
-def risk_pipeline(
-    csv_path: str, bands: int, sigma: float, min_patch: int, output_dir: str
-) -> None:
-    """Flow 3: Lightweight post-processing of pre-computed risk maps."""
-    import os
-    import numpy as np
-    import pandas as pd
-    from weatherisk.risk_pipeline import (
-        load_and_grid,
-        smooth_field,
-        quantile_bands,
-        connected_patches,
-        merge_tiny_regions,
-        remap_ids_to_sequential,
-        compute_cluster_stats,
-    )
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    click.echo(f"Loading {csv_path}...")
-    data = load_and_grid(csv_path)
-
-    ES_s = smooth_field(data["ES"], sigma, data["land_mask"])
-    es_band, _ = quantile_bands(ES_s, bands)
-    cluster_id = connected_patches(es_band, min_patch)
-    cluster_id = merge_tiny_regions(cluster_id, data["lon_grid"], data["lat_grid"])
-    cluster_id, K = remap_ids_to_sequential(cluster_id)
-
-    out_df = pd.DataFrame({
-        "lat": data["lat_grid"].ravel(),
-        "lon": data["lon_grid"].ravel(),
-        "cluster": cluster_id.ravel(),
-    })
-    out_csv = os.path.join(output_dir, "clusters.csv")
-    out_df.to_csv(out_csv, index=False)
-
-    stats = compute_cluster_stats(out_df, data["df"])
-    stats.to_csv(os.path.join(output_dir, "cluster_stats.csv"), index=False)
-
-    click.echo(f"Done. {K} clusters. Output in {output_dir}")
 
 
 @main.command()
