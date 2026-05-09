@@ -77,3 +77,25 @@ scripts/_*.R
 
 # PhD thesis draft
 docs/phd_thesis/
+
+# Meeting notes and personal working files
+meeting_notes/
+reference_papers/
+
+# Dev/exploratory output figures (everything except paper figures)
+docs/figures/
+docs/software_x/figures/*.pdf
+docs/software_x/figures/*.png
+!docs/software_x/figures/fig3_regenerated.png
+!docs/software_x/figures/fig9_combined_42260990.png
+
+# Old paper intermediate drafts and working copies
+docs/software_x/softwarex_paper.tex
+docs/software_x/softwarex_paper.pdf
+docs/software_x/softwarex_paper_v[0-9].*
+docs/software_x/softwarex_paper_v1[0-9].*
+docs/software_x/final/softwarex_paper_v19.tex
+
+# Internal working docs
+docs/code_execution_flow.md
+docs/methodology_notes.md
