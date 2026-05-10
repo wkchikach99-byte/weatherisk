@@ -31,7 +31,7 @@
 \newcommand{\revg}[1]{{#1}}
 \newcommand{\revo}[1]{{#1}}
 \newcommand{\revr}[1]{{#1}}
-\newcommand{\revn}[1]{{#1}}
+\newcommand{\revn}[1]{{\color{RevisionViolet}#1}}
 
 \lstset{
   language=Python,
@@ -185,6 +185,7 @@ spatial patterns requires both a statistically sound framework and
 software that can handle the associated computational burden---the
 dual motivation for the present work.}
 
+\revn{\textit{[v20: three paragraphs from the previous version were removed here---on the qualitative difference between average and extreme climate variability, palaeoclimate sensitivity~[11], and the link between dependence structures and atmospheric dynamics. The extended max-stable process definition was also condensed.]}}
 
 \emph{Max-stable processes} are the standard framework for
 modelling joint tail behaviour across space~[2,3].
@@ -543,6 +544,7 @@ run on the AWI \emph{albedo} HPC cluster using 16~parallel workers,
 completing in approximately 4~hours with peak memory below 2\,GiB;
 SLURM scripts and setup are provided under \texttt{hpc/}.
 
+\revn{\textit{[v20: the previous version contained a full HPC deployment subsection here, including a SLURM configuration table (Table~2), data-volume scaling discussion, xarray/dask ecosystem context, and a job-timing placeholder.  This has been condensed into the sentence above.]}}
 
 \paragraph{Command-line interface (\texttt{cli}).}
 A single entry point exposes the main pipeline flows:
@@ -744,6 +746,7 @@ valid-cell-mask differences.}
 \label{sec:validation}}
 %% ============================================================
 
+\revn{\textit{[v20: the previous version had three numbered subsections (Level~1/2/3) with detailed narrative and an extra table (\texttt{tab:mini-results}) showing stored R reference values side-by-side with Python outputs. This has been condensed into the current two-table summary format.]}}
 
 \rev{We verify \texttt{weatherisk} against the original R implementation
 of Contzen et al.~[4] at three complementary levels
@@ -958,6 +961,7 @@ ahead, GPU parallelisation via CuPy~[15] or Numba~[16] offers a
 natural path to handling next-generation kilometre-scale Earth system
 simulations without changing the underlying statistical framework.}
 
+\revn{\textit{[v20: paragraph below condensed from the more detailed version in the previous draft.]}}
 \revg{\paragraph{Outlook: Digital Earth System Twins.}
 High-resolution digital replicas of the Earth system, such as those
 produced by the European Destination Earth initiative, require automated
