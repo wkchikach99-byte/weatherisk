@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "weatherisk"
-version = "0.1.0"
+version = "0.1.1"
 description = "Climate risk analysis via max-stable process clustering"
 readme = "README.md"
 license = {text = "MIT"}

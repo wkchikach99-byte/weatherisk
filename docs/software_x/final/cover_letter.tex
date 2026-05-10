@@ -1,0 +1,87 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{microtype}
+
+\begin{document}
+
+\noindent
+Widad Kchikach\\
+Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research\\
+Bremerhaven, Germany\\
+\texttt{widad.kchikach@awi.de}
+
+\bigskip
+\noindent
+\today
+
+\bigskip
+\noindent
+\textbf{Editor-in-Chief}\\
+\textit{SoftwareX}
+
+\bigskip
+\noindent
+Dear Editor,
+
+\bigskip
+Please find enclosed our manuscript,
+\textbf{``\texttt{weatherisk}: A Python Package for Spatial Clustering
+of Climate Extremes via Max-Stable Processes''}, which we are
+submitting for consideration in \textit{SoftwareX}.
+
+\bigskip
+The work grew out of a practical need we kept running into during our
+own research: applying spatial-extremes methods to gridded climate
+output requires chaining together several technically demanding
+steps---trend removal, block-maxima extraction, GEV fitting,
+Fr\'{e}chet transformation, local max-stable parameter estimation,
+and finally clustering---and there was no single Python tool that
+handled all of them. The R implementation of Contzen et al.\ exists
+and is well-validated, but porting results back and forth between R
+and Python for a large HPC run is cumbersome. We wrote
+\texttt{weatherisk} to close that gap.
+
+\bigskip
+The package (MIT licence, v0.1.1; archived at
+\url{https://doi.org/10.5281/zenodo.20069739}) exposes the full
+pipeline through both a command-line interface and a Python API. Two
+clustering approaches are supported---Local Estimates Clustering (LEC)
+and Extremal Dependence Clustering (EDC)---and every numerical step
+is cross-checked against the original R code to make sure results
+are consistent across implementations. As a concrete demonstration,
+we revisit a published precipitation clustering study for the
+AWI-ESM-1-1-LR model ($192\times96$ grid, 1850--2005), running the
+full pipeline in Python on a high-performance cluster and obtaining
+a spatially consistent cluster structure that is broadly comparable
+to the published result.
+
+\bigskip
+The manuscript follows the SoftwareX author guidelines.
+It contains the mandatory metadata table, descriptions of the three
+implemented pipeline flows with worked CLI examples, two result
+figures, and a code appendix with self-contained snippets for each
+flow. The source code is publicly available on GitHub and permanently
+archived on Zenodo.
+
+\bigskip
+W.~Kchikach built the software, ran all experiments, and wrote the
+paper. T.~Dickhaus and G.~Lohmann guided the scientific direction and
+reviewed the manuscript. All authors have read the final version and
+agree to this submission. We have no competing interests to declare.
+
+\bigskip
+We hope \texttt{weatherisk} will be useful to researchers working at
+the intersection of spatial statistics and climate science, and we
+look forward to the reviewers' comments.
+
+\bigskip\bigskip
+\noindent
+Yours sincerely,
+
+\bigskip\bigskip
+\noindent
+Widad Kchikach\\
+(on behalf of all co-authors)
+
+\end{document}
