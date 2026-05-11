@@ -37,7 +37,10 @@ output requires chaining together several technically demanding
 steps---trend removal, block-maxima extraction, GEV fitting,
 Fr\'{e}chet transformation, local max-stable parameter estimation,
 and finally clustering---and there was no single Python tool that
-handled all of them. The R implementation of Contzen et al.\ exists
+handled all of them. The R implementation of Contzen, Dickhaus, and Lohmann
+(``Regionalization approaches for the spatial analysis of extremal
+dependence'', \textit{Extremes}, 2025,
+\url{https://doi.org/10.1007/s10687-025-00519-2}) exists
 and is well-validated, but porting results back and forth between R
 and Python for a large HPC run is cumbersome. We wrote
 \texttt{weatherisk} to close that gap.
