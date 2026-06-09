@@ -20,7 +20,7 @@ keywords = ["climate", "risk", "extreme-value", "max-stable", "clustering"]
 Homepage = "https://github.com/wkchikach99-byte/weatherisk"
 Repository = "https://github.com/wkchikach99-byte/weatherisk"
 "Bug Tracker" = "https://github.com/wkchikach99-byte/weatherisk/issues"
-"Zenodo DOI" = "https://doi.org/10.5281/zenodo.20069739"
+"Zenodo DOI" = "https://doi.org/10.5281/zenodo.20108563"
 
 classifiers = [
     "Development Status :: 3 - Alpha",

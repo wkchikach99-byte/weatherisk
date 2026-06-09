@@ -38,6 +38,17 @@ docs/software_x/softwarex_paper_v16-final.pdf
 docs/software_x/softwarex_template_official*
 docs/software_x/tectonic
 
+# Paper draft versions v19 onwards (internal — submission copy only)
+docs/software_x/final/softwarex_paper_v19*
+docs/software_x/final/softwarex_paper_v20*
+docs/software_x/final/softwarex_paper_v21*
+docs/software_x/final/softwarex_paper_v22*
+docs/software_x/editing/
+docs/software_x/final/supervisor_response*
+
+# Submission PDF (submitted via Elsevier EM — not stored in code repo)
+Risk_Extremes_papertobesubmitted.pdf
+
 # Copyrighted reference PDFs
 reference_papers/
 
@@ -53,6 +64,10 @@ questions.md
 meeting_notes/
 texput.log
 .tmp_benchmark_head
+
+# Local development/debug scripts (underscore-prefixed, not for public repo)
+scripts/_*
+scripts/_tmp_*
 
 # Internal docs — migration plans, dev notes
 docs/methodology*.docx

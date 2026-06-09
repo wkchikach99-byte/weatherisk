@@ -10,7 +10,6 @@ authors:
     given-names: Widad
     email: widad.kchikach@awi.de
     affiliation: "Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research, Bremerhaven, Germany"
-    orcid: ""
   - family-names: Dickhaus
     given-names: Thorsten
     affiliation: "University of Bremen, Bremen, Germany"
@@ -43,7 +42,7 @@ repository-code: "https://github.com/wkchikach99-byte/weatherisk"
 identifiers:
   - type: doi
     value: "10.5281/zenodo.20108563"
-    description: "Zenodo archived release v0.1.0"
+    description: "Zenodo archived release v0.1.1"
 
 references:
   - type: article
