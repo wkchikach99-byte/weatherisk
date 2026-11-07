@@ -27,6 +27,8 @@ def main():
                         help="Number of simulations (default: preset value, 250)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=str, default="docs/figures/fig3_paper_stripes.png")
+    parser.add_argument("--output-dir", type=str, default=None,
+                        help="Directory for labels, estimates and k values as .npy files")
     parser.add_argument("--workers", type=int, default=1,
                         help="Number of parallel workers for local MLE (default: 1)")
     args = parser.parse_args()
@@ -39,7 +41,12 @@ def main():
         n_sim=args.n_sim,
         seed=args.seed,
         n_workers=args.workers,
+        output_dir=args.output_dir,
     )
+    if args.output_dir is not None:
+        import numpy as np
+        np.save(os.path.join(args.output_dir, "b_matrix.npy"), result["b_matrix"])
+        np.save(os.path.join(args.output_dir, "k.npy"), np.array([result["k_edc"], result["k_lec"]]))
 
     plot_cluster_comparison(
         result["grid"], result["labels_edc"], result["labels_lec"],
