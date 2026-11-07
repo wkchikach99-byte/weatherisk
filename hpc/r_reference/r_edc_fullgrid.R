@@ -10,7 +10,7 @@
 #   -> hclust(average) via clustering() -> cluster_number_threshold_method
 #   -> max(k, min_k) -> cutree.
 #
-# The madogram, threshold, k rule and hclust call are Thorsten Dickhaus's
+# The madogram, threshold, k rule and hclust call are the reference R code's
 # functions, sourced unchanged from r_code/functions.R.  STL, annual maxima,
 # GEV and Frechet steps are copied from the frozen mini-reference generator.
 #
@@ -123,7 +123,7 @@ logmsg <- function(...) {
   flush.console()
 }
 
-source(functions_path)   # Thorsten's functions; defines no globals we rely on
+source(functions_path)   # reference R functions (Contzen et al.); defines no globals we rely on
 
 # ── Input readers ──────────────────────────────────────────────────────────
 run_capture <- function(cmd, args) {
@@ -414,7 +414,7 @@ if (!is_sim && !is_mado) {
            sum(apply(frechet_mat, 2, function(v) anyDuplicated(v) > 0)))
 }
 
-# ── Madogram (Thorsten's c_extrcoeff_matrix, unchanged) ────────────────────
+# ── Madogram (reference c_extrcoeff_matrix, unchanged) ────────────────────
 if (!is_mado) {
   n_sim <- n_years
   a_sim <- array(t(frechet_mat), dim = c(nrow_g, ncol_g, n_years))
@@ -446,7 +446,7 @@ heights <- list()
 for (ord in orders) {
   t0 <- proc.time()[["elapsed"]]
   if (ord == "r") {
-    hc <- clustering(v_matrix)                     # Thorsten's call
+    hc <- clustering(v_matrix)                     # reference R call
   } else {
     d_py <- as.dist(v_matrix[r_of_py, r_of_py])    # scipy condensed order
   }

@@ -1,7 +1,7 @@
 """Shared fixtures and helpers for the Python-vs-R parity tests.
 
 Every test in this directory compares weatherisk against frozen outputs of
-Thorsten Dickhaus's R code (r_code/), generated once by
+the reference R code of Contzen et al. (r_code/), generated once by
 tests/generate_r_reference.R.  No test calls R; all of them pass with
 ``Rscript`` absent from PATH.
 

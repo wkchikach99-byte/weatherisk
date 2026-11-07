@@ -1,5 +1,5 @@
 ###############################################################################
-# VALIDATION PATCH.  Not part of Thorsten Dickhaus's code and not used by
+# VALIDATION PATCH.  Not part of the reference R code of Contzen et al. and not used by
 # weatherisk.  r_code/ is never edited.
 #
 # Defines calc_distance_ellipses_fixed(), a copy of calc_distance_ellipses

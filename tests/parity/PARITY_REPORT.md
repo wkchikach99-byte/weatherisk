@@ -10,7 +10,7 @@
 ## What is compared
 
 weatherisk is a pure-Python package. No test calls R. Each test compares
-weatherisk against frozen outputs of Thorsten Dickhaus's R code
+weatherisk against frozen outputs of the reference R code of Contzen et al.
 (`r_code/functions.R`). These outputs were generated once by
 `tests/generate_r_reference.R` and `tests/generate_cmip6_mini_reference.R`
 and are stored in `tests/reference_data/`. The main fixture stores

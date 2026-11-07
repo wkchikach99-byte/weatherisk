@@ -11,7 +11,7 @@
 #SBATCH --output=/albedo/work/user/wikchi001/weatherisk_r_reference/logs/%x_%j.out
 #SBATCH --error=/albedo/work/user/wikchi001/weatherisk_r_reference/logs/%x_%j.out
 ###############################################################################
-# Criterion F1, R side: Thorsten's deterministic EDC chain on the full
+# Criterion F1, R side: the reference R code's deterministic EDC chain on the full
 # Figure 9 input (AWI-ESM-1-1-LR historical pr, 1850-2005, 96 x 192 cells),
 # clustered in R's cell order and in weatherisk's cell order.
 #
