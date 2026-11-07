@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import numpy as np
 
-_HAS_RUST_GRID = False
-
 
 def rad(degrees: float) -> float:
     """Convert degrees to radians."""
@@ -120,8 +118,6 @@ class Grid:
         The returned index uses column-major ordering, consistent with
         ``grid_number`` and ``number_grid``.
         """
-        if _HAS_RUST_GRID:
-            return int(_rc.koord_num(x, y, self.x_ax, self.y_ax))
         dists = (self.X - x) ** 2 + (self.Y - y) ** 2
         row, col = np.unravel_index(int(np.argmin(dists)), self.X.shape)
         return self.grid_number(row, col)

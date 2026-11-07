@@ -231,7 +231,7 @@ def plot_cluster_comparison(
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
     # (a) EDC
-    im0 = axes[0].pcolormesh(
+    axes[0].pcolormesh(
         grid.x_ax, grid.y_ax, edc_map,
         shading="auto", cmap=cmap, vmin=vmin, vmax=vmax,
     )
@@ -246,7 +246,7 @@ def plot_cluster_comparison(
     axes[0].set_aspect("equal")
 
     # (b) LEC
-    im1 = axes[1].pcolormesh(
+    axes[1].pcolormesh(
         grid.x_ax, grid.y_ax, lec_map,
         shading="auto", cmap=cmap, vmin=vmin, vmax=vmax,
     )

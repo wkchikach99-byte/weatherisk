@@ -12,7 +12,7 @@ import numpy as np
 from scipy.special import gamma as gamma_fn
 from scipy.stats import norm
 
-from weatherisk.covariance import cov_fkt_2d, cov_fkt_2d_nonstat2, build_nonstat_cov_matrix
+from weatherisk.covariance import cov_fkt_2d, build_nonstat_cov_matrix
 from weatherisk.grid import Grid
 
 

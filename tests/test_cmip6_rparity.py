@@ -69,19 +69,8 @@ _BACKENDS = ["python"]
 
 @contextlib.contextmanager
 def _force_backend(name: str):
-    """Temporarily force weatherisk.backend to use a specific backend.
-
-    Patches the module-level ``_USE_RUST`` flag so that
-    ``_nll_and_grad_factory`` / ``calc_distance_ellipses`` dispatch
-    to the requested engine for the duration of the context.
-    """
-    import weatherisk.backend as _be
-    old = _be._USE_RUST
-    _be._USE_RUST = False
-    try:
-        yield
-    finally:
-        _be._USE_RUST = old
+    """No-op: only the Python backend exists."""
+    yield
 
 
 def _skip_if_no_ref():

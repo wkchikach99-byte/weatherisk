@@ -13,7 +13,6 @@ from typing import Any
 import numpy as np
 
 from weatherisk.grid import Grid
-from weatherisk.covariance import cov_fkt_2d
 from weatherisk.simulation import sim_expt_2d, sim_expt_2d_nonstat
 from weatherisk.clustering import (
     calc_distance_ellipses,
@@ -22,7 +21,7 @@ from weatherisk.clustering import (
     cluster_number_threshold_method,
     quantile_threshold,
 )
-from weatherisk.density import pairwise_density_optim_local, run_local_mle_parallel
+from weatherisk.density import run_local_mle_parallel
 from weatherisk.estimation import (
     smooth_local_estimates,
     calc_estimates_in_clusters,

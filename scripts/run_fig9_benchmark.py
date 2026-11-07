@@ -21,12 +21,6 @@ def main() -> None:
     parser.add_argument("--year-start", type=int, default=1980)
     parser.add_argument("--dpi", type=int, default=300)
     parser.add_argument(
-        "--backend",
-        choices=["python"],
-        default="python",
-        help="Backend to use during the benchmark. Only the Python backend is active.",
-    )
-    parser.add_argument(
         "--skip-plots",
         action="store_true",
         help="Skip plot generation if you only want the pipeline timing.",
@@ -42,7 +36,6 @@ def main() -> None:
         year_start=args.year_start,
         dpi=args.dpi,
         generate_plots=not args.skip_plots,
-        backend=args.backend,
     )
 
     result = run_figure9_benchmark(benchmark, markdown_path=args.markdown_path)

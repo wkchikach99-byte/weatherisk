@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from weatherisk.covariance import cov_fkt_2d
 
 
 def calc_distance_ellipses(
@@ -79,7 +78,6 @@ def calc_distance_ellipses(
 
     for i_start in range(0, n, chunk):
         i_end = min(i_start + chunk, n)
-        ch = i_end - i_start
 
         # mx[ci, j] = max(ab[i_start+ci], ab[j])
         mx = np.maximum(ab[i_start:i_end, None], ab[None, :])  # (ch, n)
@@ -259,15 +257,11 @@ def clustering(
     ndarray
         Linkage matrix (scipy format).
     """
+    from scipy.cluster.hierarchy import linkage
     from scipy.spatial.distance import squareform
 
-    from weatherisk.backend import clustering_via_r
-
-    if dist_matrix.ndim == 1:
-        # Convert condensed to square for R
-        dist_matrix = squareform(dist_matrix)
-
-    return clustering_via_r(dist_matrix, method=method)
+    condensed = dist_matrix if dist_matrix.ndim == 1 else squareform(dist_matrix, checks=False)
+    return linkage(condensed, method=method)
 
 
 def cluster_number_threshold_method(

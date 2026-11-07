@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import importlib.util
-import json
 import os
 import subprocess
 import threading
@@ -16,7 +15,6 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 import weatherisk.cmip6_pipeline as cmip6_pipeline
-from weatherisk.cmip6_pipeline import CMIP6Config
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -107,7 +105,6 @@ class Figure9BenchmarkConfig:
     year_start: int = 1980
     dpi: int = 300
     generate_plots: bool = True
-    backend: str = "python"
     suppress_script_output: bool = True
 
 
@@ -185,19 +182,6 @@ def _patched_pipeline_environment(
 
 
 @contextmanager
-def _forced_backend(backend: str):
-    old_backend = os.environ.get("WEATHERISK_BACKEND")
-    os.environ["WEATHERISK_BACKEND"] = backend
-    try:
-        yield
-    finally:
-        if old_backend is None:
-            os.environ.pop("WEATHERISK_BACKEND", None)
-        else:
-            os.environ["WEATHERISK_BACKEND"] = old_backend
-
-
-@contextmanager
 def _timed_pipeline_steps(timings: dict[str, float]):
     """Wrap full-pipeline step functions so run_cmip6_pipeline records timings."""
     step_names = [
@@ -245,7 +229,7 @@ def run_figure9_benchmark(
     with TemporaryDirectory(prefix="weatherisk-benchmark-") as tmpdir:
         with _profile_peak_memory() as memory_sampler:
             t0 = time.perf_counter()
-            with _forced_backend(config.backend), _patched_pipeline_environment(pr, times, lats, lons), _timed_pipeline_steps(timings):
+            with _patched_pipeline_environment(pr, times, lats, lons), _timed_pipeline_steps(timings):
                 reproduce_fig9 = _load_reproduce_fig9_module()
 
                 argv = [
@@ -285,7 +269,6 @@ def run_figure9_benchmark(
             "saved_figure_count": int(len(saved_figures)),
         },
         "invocation": {
-            "backend": config.backend,
             "plots_enabled": bool(config.generate_plots),
         },
         "timings_seconds": timings,

@@ -32,17 +32,14 @@ from __future__ import annotations
 
 import os
 import time
-import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 from scipy.cluster.hierarchy import fcluster
-from scipy.optimize import minimize
-from scipy.stats import qmc, rankdata
+from scipy.stats import rankdata
 
 from weatherisk.extremes import block_maxima, fit_gev, to_frechet
-from weatherisk.density import pairwise_density_summand
 from weatherisk.clustering import (
     calc_distance_ellipses,
     clustering,
@@ -640,7 +637,7 @@ def run_cpc_pipeline(
                     return f"${v / 1e6:.1f}M"
                 return f"${v:,.0f}"
 
-            print(f"\n  GDP-weighted risk  (ES₉₅ × GDP per cell):")
+            print("\n  GDP-weighted risk  (ES₉₅ × GDP per cell):")
             print(f"    LEC  total = {_fmt(risk_gdp_lec.sum())}")
             print(f"    LEC  max cell = {_fmt(risk_gdp_lec.max())}")
             print(f"    EDC  total = {_fmt(risk_gdp_edc.sum())}")

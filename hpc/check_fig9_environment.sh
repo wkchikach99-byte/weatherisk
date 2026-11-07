@@ -50,19 +50,9 @@ for name in mods:
     module = importlib.import_module(name)
     print(f"import ok: {name} -> {getattr(module, '__file__', '<built-in>')}")
 
-try:
-    rc = importlib.import_module("weatherisk_core")
-    print(f"import ok: weatherisk_core -> {rc.__file__}")
-except Exception as exc:
-    print(f"WARNING: weatherisk_core not importable: {exc}")
-
-from weatherisk.backend import _USE_RUST
-print(f"backend autodetect: {'Rust' if _USE_RUST else 'Python'}")
-
 required = [
     "scripts/reproduce_fig9.py",
     "hpc/run_fig9_clean.slurm",
-    "crates/weatherisk_core/Cargo.toml",
 ]
 for path in required:
     if not os.path.exists(path):

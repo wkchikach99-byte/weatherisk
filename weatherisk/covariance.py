@@ -16,8 +16,6 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.stats import t as t_dist
 
-_HAS_RUST_COVARIANCE = False
-
 
 def cov_fkt_2d(
     x: float | np.ndarray,
@@ -140,7 +138,6 @@ def build_nonstat_cov_matrix(
     ndarray, shape (n, n)
         Symmetric positive-definite covariance matrix.
     """
-    n = len(X_flat)
     sg = np.sin(g_flat)
     cg = np.cos(g_flat)
     ap = a_flat + b_flat  # semi-major axis
@@ -199,11 +196,6 @@ def cov_to_ec(df: float, cov: float) -> float:
     float
         Extremal coefficient in [1, 2].
     """
-    # Keep the extremal-coefficient conversion on the SciPy path for now.
-    # The Rust `ec_to_cov` implementation currently uses a looser root-finding
-    # tolerance than the frozen R fixtures, which is enough to break the
-    # cross-validation suite at strict parity tolerances.
-
     if cov >= 1.0:
         return 1.0
     cov = max(cov, -1.0 + 1e-12)  # guard against division by zero at rho=-1

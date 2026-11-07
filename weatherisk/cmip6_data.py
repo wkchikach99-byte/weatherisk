@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -172,7 +171,7 @@ def download_from_esgf(
 
     _log("\n📥 Downloading AWI-ESM-1-1-LR monthly precipitation from ESGF …",
          verbose)
-    _log(f"   Source: DKRZ ESGF node", verbose)
+    _log("   Source: DKRZ ESGF node", verbose)
     _log(f"   Target: {data_dir}\n", verbose)
 
     success = True

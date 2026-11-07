@@ -24,7 +24,7 @@ def test_figure9_benchmark_runs_and_writes_markdown(tmp_path: Path):
     assert result["script_entrypoint"] == "scripts.reproduce_fig9.main"
     assert result["pipeline_entrypoint"] == "weatherisk.cmip6_pipeline.run_cmip6_pipeline"
     assert result["memory_profile"]["metric"] == "peak_process_tree_rss"
-    assert result["memory_profile"]["max_rss_bytes"] > 0
+    assert result["memory_profile"]["max_rss"]["bytes"] > 0
     assert output.exists()
     text = output.read_text(encoding="utf-8")
     assert "# Benchmark Results" in text

@@ -31,10 +31,7 @@ import gc
 import json
 import os
 import shutil
-import subprocess
-import tempfile
 import time
-import warnings
 from dataclasses import dataclass
 from multiprocessing import Pool
 from pathlib import Path
@@ -42,12 +39,10 @@ from typing import Any
 
 import numpy as np
 from scipy.cluster.hierarchy import fcluster
-from scipy.optimize import minimize
 from scipy.spatial.distance import cdist, pdist, squareform
-from scipy.stats import qmc, rankdata
+from scipy.stats import rankdata
 
 from weatherisk.extremes import fit_gev, to_frechet
-from weatherisk.density import pairwise_density_summand
 from weatherisk.clustering import (
     calc_distance_ellipses,
     clustering,
@@ -56,7 +51,7 @@ from weatherisk.clustering import (
 from weatherisk.backend import (
     calc_distance_ellipses_condensed,
 )
-from weatherisk.cmip6_data import (
+from weatherisk.cmip6_data import (  # noqa: F401  (ensure_cmip6_data re-exported; patched by benchmarks)
     ensure_cmip6_data,
     load_monthly_precipitation,
     DEFAULT_DATA_DIR,
@@ -327,82 +322,6 @@ _INCLUSTER_LABELS: np.ndarray | None = None
 _INCLUSTER_CFG: CMIP6Config | None = None
 
 
-def _rscript_path() -> str:
-    candidate = shutil.which("Rscript")
-    if candidate is None:
-        raise RuntimeError(
-            "Rscript not found on PATH. "
-            "R is required for exact numerical parity."
-        )
-    return candidate
-
-
-def _detrend_grid_via_r(pr: np.ndarray, period: int) -> np.ndarray:
-    rscript = _rscript_path()
-
-    n_months, n_lat, n_lon = pr.shape
-    pr_flat = pr.reshape(n_months, n_lat * n_lon, order="F")
-    r_code = """
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) > 0 && args[1] == '--args') {
-  args <- args[-1]
-}
-input_path <- args[1]
-output_path <- args[2]
-period_val <- as.integer(args[3])
-n_months <- as.integer(args[4])
-n_cells <- as.integer(args[5])
-
-pr <- as.matrix(read.csv(input_path, header = FALSE))
-if (!all(dim(pr) == c(n_months, n_cells))) {
-  stop('Unexpected input matrix dimensions')
-}
-
-detrended <- matrix(0, nrow = n_months, ncol = n_cells)
-for (cell in 1:n_cells) {
-  ts_data <- ts(pr[, cell], frequency = period_val)
-  stl_fit <- stl(ts_data, s.window = 'periodic', robust = TRUE)
-  detrended[, cell] <- pr[, cell] - stl_fit$time.series[, 'trend']
-}
-
-write.table(detrended, file = output_path, row.names = FALSE, col.names = FALSE, sep = ',')
-"""
-
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            input_path = Path(tmpdir) / "cmip6_pr.csv"
-            output_path = Path(tmpdir) / "cmip6_detrended.csv"
-            np.savetxt(input_path, pr_flat, delimiter=",")
-            subprocess.run(
-                [
-                    rscript,
-                    "-e",
-                    r_code,
-                    "--args",
-                    str(input_path),
-                    str(output_path),
-                    str(int(period)),
-                    str(int(n_months)),
-                    str(int(n_lat * n_lon)),
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            detrended_flat = np.loadtxt(output_path, delimiter=",")
-    except (OSError, subprocess.SubprocessError, ValueError) as exc:
-        raise RuntimeError(f"R STL detrending subprocess failed: {exc}") from exc
-
-    detrended_flat = np.atleast_2d(np.asarray(detrended_flat, dtype=float))
-    if detrended_flat.shape == (1, pr_flat.shape[0]):
-        detrended_flat = detrended_flat.T
-    if detrended_flat.shape != pr_flat.shape:
-        raise RuntimeError(
-            f"R STL output shape {detrended_flat.shape} != expected {pr_flat.shape}"
-        )
-    return detrended_flat.reshape(n_months, n_lat, n_lon, order="F")
-
-
 def _mle_worker_init(frechet, grid_coords, cfg):
     """Initializer for MLE worker pool — sets shared data."""
     global _MLE_FRECHET, _MLE_GRID_COORDS, _MLE_CFG
@@ -573,12 +492,6 @@ def _detrend_grid_fast(
         print("\n" + "=" * 60)
         print("  Step 1a : De-trending (STL)")
         print("=" * 60)
-
-    if n_workers == 1:
-        detrended_r = _detrend_grid_via_r(pr, period)
-        if verbose:
-            print("  Using local R STL oracle for exact parity")
-        return detrended_r
 
     t0 = time.time()
     n_months, n_lat, n_lon = pr.shape
@@ -1459,7 +1372,6 @@ def plot_figure9(
 
     try:
         import cartopy.crs as ccrs
-        import cartopy.feature as cfeature
         HAS_CARTOPY = True
     except ImportError:
         HAS_CARTOPY = False
@@ -1587,7 +1499,7 @@ def plot_figure9(
         grid_2d = _labels_to_grid(labels)
         cmap = _make_cmap(k)
         if use_cartopy:
-            mesh = ax.pcolormesh(
+            ax.pcolormesh(
                 lon2d, lat2d, grid_2d,
                 transform=ccrs.PlateCarree(),
                 cmap=cmap, vmin=0.5, vmax=k + 0.5,
@@ -1596,7 +1508,7 @@ def plot_figure9(
             ax.coastlines(linewidth=0.5)
             ax.set_global()
         else:
-            mesh = ax.pcolormesh(
+            ax.pcolormesh(
                 lon2d, lat2d, grid_2d,
                 cmap=cmap, vmin=0.5, vmax=k + 0.5,
                 shading="auto",
@@ -1619,6 +1531,6 @@ def plot_figure9(
     plt.close(fig)
     saved.append(path)
     if verbose:
-        print(f"  ✓ fig9_combined.png")
+        print("  ✓ fig9_combined.png")
 
     return saved

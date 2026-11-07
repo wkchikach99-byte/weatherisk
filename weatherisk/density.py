@@ -11,9 +11,6 @@ from functools import lru_cache
 
 import numpy as np
 from scipy.special import gammaln, stdtr
-from scipy.stats import norm
-
-_HAS_RUST_DENSITY = False
 
 from weatherisk.covariance import cov_fkt_2d
 
@@ -132,9 +129,9 @@ def pairwise_density_optim(
 ) -> np.ndarray:
     """Global MLE of (a, b, g) via multi-start L-BFGS-B.
 
-    Builds pair arrays and delegates to R's optim() via subprocess
-    for exact R parity (no boundary retries, matching R's
-    pairwise_density_optim).
+    Builds the pair arrays as R's ``pairwise_density_optim`` does and
+    runs :func:`weatherisk.backend.optimize_local_mle` without boundary
+    retries, since R's global estimator has none.
 
     Parameters
     ----------
