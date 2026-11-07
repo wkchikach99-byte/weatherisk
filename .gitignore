@@ -65,9 +65,25 @@ meeting_notes/
 texput.log
 .tmp_benchmark_head
 
+# Submission PDFs (submitted via Elsevier EM — not stored in the code repo)
+Risk_Extremes_*.pdf
+
+# Internal PhD planning and progress docs
+docs/maternity_leave_progress_update*
+docs/phd_roadmap*
+docs/road_map_phd*
+
 # Local development/debug scripts (underscore-prefixed, not for public repo)
 scripts/_*
 scripts/_tmp_*
+
+# Risk paper work-in-progress scripts (separate paper, not part of this package)
+scripts/analyze_v8_*
+scripts/generate_climatology_*
+scripts/generate_riskpaper_*
+scripts/generate_v8_*
+scripts/run_productB_*
+scripts/test_evt_*
 
 # Internal docs — migration plans, dev notes
 docs/methodology*.docx
@@ -124,3 +140,4 @@ scripts/risk_decomposition*.py
 scripts/plot_risk*.py
 scripts/investigate_risk_metrics.py
 scripts/validate_es.py
+.audit/
