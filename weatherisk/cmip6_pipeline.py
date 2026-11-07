@@ -40,7 +40,6 @@ from typing import Any
 import numpy as np
 from scipy.cluster.hierarchy import fcluster
 from scipy.spatial.distance import cdist, pdist, squareform
-from scipy.stats import rankdata
 
 from weatherisk.extremes import fit_gev, to_frechet
 from weatherisk.stl import stl
@@ -48,6 +47,7 @@ from weatherisk.clustering import (
     calc_distance_ellipses,
     clustering,
     cluster_number_threshold_method,
+    madogram_ranks,
 )
 from weatherisk.backend import (
     LOCAL_MLE_ENSEMBLE,
@@ -882,10 +882,8 @@ def _edc_matrix_flat(frechet: np.ndarray) -> np.ndarray:
     ----------
     frechet : ndarray, shape (n_years, n_cells)
     """
-    n_years, n_cells = frechet.shape
-    ranks = np.empty((n_cells, n_years))
-    for s in range(n_cells):
-        ranks[s] = rankdata(frechet[:, s])
+    n_years = frechet.shape[0]
+    ranks = madogram_ranks(frechet, axis=0).T
 
     diff_sum = cdist(ranks, ranks, metric="cityblock")
     v = diff_sum / (n_years * 2.0 * (n_years + 1))
@@ -899,10 +897,8 @@ def _edc_condensed_flat(frechet: np.ndarray) -> np.ndarray:
     Returns the raw madogram values (upper triangle) matching
     :func:`_edc_matrix_flat`, for use with scipy linkage.
     """
-    n_years, n_cells = frechet.shape
-    ranks = np.empty((n_cells, n_years))
-    for s in range(n_cells):
-        ranks[s] = rankdata(frechet[:, s])
+    n_years = frechet.shape[0]
+    ranks = madogram_ranks(frechet, axis=0).T
 
     diff_sum = pdist(ranks, metric="cityblock")
     return diff_sum / (n_years * 2.0 * (n_years + 1))

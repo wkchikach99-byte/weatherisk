@@ -37,7 +37,6 @@ from typing import Any
 
 import numpy as np
 from scipy.cluster.hierarchy import fcluster
-from scipy.stats import rankdata
 
 from weatherisk.backend import LOCAL_MLE_ENSEMBLE
 from weatherisk.extremes import block_maxima, fit_gev, to_frechet
@@ -45,6 +44,7 @@ from weatherisk.clustering import (
     calc_distance_ellipses,
     clustering,
     cluster_number_threshold_method,
+    madogram_ranks,
 )
 from weatherisk.risk import compute_var, compute_es
 
@@ -388,9 +388,7 @@ def _smooth_estimates(est, coords, cfg: PipelineConfig, *,
 def _edc_matrix(frechet):
     """Rank-based madogram extremal-coefficient matrix D₁."""
     n_blocks, n_cells = frechet.shape
-    ranks = np.column_stack(
-        [rankdata(frechet[:, s]) for s in range(n_cells)]
-    ).T  # (n_cells, n_blocks)
+    ranks = madogram_ranks(frechet, axis=0).T  # (n_cells, n_blocks)
 
     ec = np.zeros((n_cells, n_cells))
     for i in range(n_cells - 1):

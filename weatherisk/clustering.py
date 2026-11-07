@@ -10,6 +10,20 @@ from __future__ import annotations
 import numpy as np
 
 
+def madogram_ranks(x: np.ndarray, axis: int = -1) -> np.ndarray:
+    """Ranks for the rank madogram, with ties handled as in the reference code.
+
+    ``c_extrcoeff_matrix`` in the R reference code ranks observation k of a
+    series as ``sum(x[k] <= x)``, the number of observations at least as large.
+    ``rankdata(-x, method="max")`` computes exactly that count. The madogram
+    uses only rank differences, so this is equivalent to ``rankdata(x,
+    method="min")``. Average or max ranks give different madograms when a
+    series has tied values.
+    """
+    from scipy.stats import rankdata
+
+    return rankdata(-np.asarray(x, dtype=np.float64), method="max", axis=axis)
+
 
 def calc_distance_ellipses(
     estimates: np.ndarray,
@@ -209,20 +223,13 @@ def c_extrcoeff_matrix(
         Symmetric matrix.
     """
     from scipy.spatial.distance import cdist
-    from scipy.stats import rankdata
 
     nrow, ncol, n_sim = sim_data.shape
     n_grid = nrow * ncol
     # Flatten in Fortran (column-major) order to match R's as.vector()
     flat = sim_data.reshape(n_grid, n_sim, order='F')
 
-    # Compute ranks per row — equivalent to the original
-    #   rank[s, k] = sum(flat[s, k] <= flat[s, :])
-    # For continuous data (no ties), any ranking method gives the same
-    # absolute differences, so we use the fast argsort-based rankdata.
-    rank_matrix = np.empty((n_grid, n_sim))
-    for s in range(n_grid):
-        rank_matrix[s] = rankdata(flat[s], method='max')
+    rank_matrix = madogram_ranks(flat, axis=1)
 
     # Pairwise mean absolute rank difference via cdist (C-optimised)
     # cdist 'cityblock' = sum|u_k - v_k|;  divide by n_sim for mean
