@@ -57,6 +57,10 @@ def main(argv: list[str] | None = None):
         help="Last year (inclusive).",
     )
     parser.add_argument(
+        "--no-detrend", action="store_true",
+        help="Take annual maxima of the raw monthly series, without STL.",
+    )
+    parser.add_argument(
         "--dpi", type=int, default=300,
         help="Figure DPI.",
     )
@@ -78,6 +82,7 @@ def main(argv: list[str] | None = None):
         output_dir=args.output_dir,
         year_start=args.year_start,
         year_end=args.year_end,
+        detrend=not args.no_detrend,
         n_workers=args.workers,
     )
 
@@ -88,6 +93,7 @@ def main(argv: list[str] | None = None):
     print("  AWI-ESM-1-1-LR historical precipitation")
     print(f"  ν={cfg.df}, α={cfg.alpha}, ε={cfg.neighbor_radius}")
     print(f"  Period: {cfg.year_start}–{cfg.year_end}")
+    print(f"  STL detrending: {cfg.detrend}")
     print(f"  Workers: {cfg.n_workers}")
     print(f"  Output: {cfg.output_dir}")
     print("=" * 60)

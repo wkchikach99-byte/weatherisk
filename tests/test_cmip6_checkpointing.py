@@ -319,3 +319,32 @@ def test_cmip6_pipeline_resumes_step6_per_cluster(tmp_path, monkeypatch):
     assert result["k_edc"] == 2
     assert set(result["incl_lec"]) == {1, 2}
     assert set(result["incl_edc"]) == {3, 4}
+
+@pytest.mark.parametrize("detrend", [True, False])
+def test_detrend_flag_controls_what_reaches_annual_maxima(tmp_path, monkeypatch, detrend):
+    _patch_fast_cmip6_pipeline(monkeypatch, fail_local_once=False)
+    raw = np.arange(24 * 4, dtype=float).reshape(24, 2, 2)
+    monkeypatch.setattr(cmip6_pipeline, "load_monthly_precipitation",
+                        lambda *a, **k: (raw.copy(), None, np.array([-10.0, 10.0]),
+                                         np.array([0.0, 180.0])))
+    monkeypatch.setattr(cmip6_pipeline, "_detrend_grid_fast",
+                        lambda pr_in, **k: pr_in - 1000.0)
+    seen = {}
+    stub_maxima = cmip6_pipeline._monthly_annual_maxima
+
+    def record_maxima(pr_in, times_in, verbose=True):
+        seen["pr"] = pr_in.copy()
+        return stub_maxima(pr_in, times_in, verbose=verbose)
+
+    monkeypatch.setattr(cmip6_pipeline, "_monthly_annual_maxima", record_maxima)
+    cfg = cmip6_pipeline.CMIP6Config(data_dir=str(tmp_path / "in"), output_dir=str(tmp_path / "out"),
+                                     detrend=detrend)
+    cmip6_pipeline.run_cmip6_pipeline(cfg, verbose=False)
+
+    np.testing.assert_array_equal(seen["pr"], raw - 1000.0 if detrend else raw)
+
+
+def test_checkpoint_from_detrended_run_is_not_reused_without_detrending():
+    on = cmip6_pipeline.CMIP6Config(detrend=True)
+    off = cmip6_pipeline.CMIP6Config(detrend=False)
+    assert cmip6_pipeline._checkpoint_signature(on) != cmip6_pipeline._checkpoint_signature(off)

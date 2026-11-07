@@ -92,7 +92,8 @@ class CMIP6Config:
     # Clustering (§5)
     quantile_threshold: float = 0.30  # 30%-quantile of pairwise dists
 
-    # STL
+    # STL. detrend=False takes annual maxima of the raw monthly series.
+    detrend: bool = True
     stl_period: int = 12  # months (annual seasonality)
 
     # Parallelism
@@ -134,6 +135,7 @@ def _checkpoint_signature(cfg: CMIP6Config) -> dict[str, Any]:
         "mle_ensemble": int(cfg.mle_ensemble),
         "quantile_threshold": float(cfg.quantile_threshold),
         "stl_period": int(cfg.stl_period),
+        "detrend": bool(cfg.detrend),
     }
 
 
@@ -1115,10 +1117,15 @@ def run_cmip6_pipeline(
         )
 
         # Step 1a: de-trend (parallel STL)
-        pr_detrended = _detrend_grid_fast(
-            pr, period=cfg.stl_period,
-            n_workers=cfg.n_workers, verbose=verbose,
-        )
+        if cfg.detrend:
+            pr_detrended = _detrend_grid_fast(
+                pr, period=cfg.stl_period,
+                n_workers=cfg.n_workers, verbose=verbose,
+            )
+        else:
+            if verbose:
+                print("  Detrending skipped (detrend=False)")
+            pr_detrended = pr
         del pr
         gc.collect()
 
