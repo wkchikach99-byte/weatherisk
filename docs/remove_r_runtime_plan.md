@@ -232,6 +232,14 @@ Tests alone are not sufficient verification. A unit is verified only when its un
 - [ ] Figure 9. Run `hpc/run_fig9_clean.slurm` on albedo with the U3 defaults. Record `k_edc`, `k_lec` and the run time.
 - [ ] Compare each figure with the R-backed version and with Contzen et al. (2025). Report adjusted Rand index between partitions and the change in k.
 
+**Figure criteria, fixed on 2026-11-07 before any pure-Python full run.** Each criterion is either asserted or reported. Only the deterministic steps are asserted. An asserted criterion that fails is a bug to find. A reported number is never tuned toward a target.
+
+- F1, asserted. The EDC chain contains no random step: STL, block maxima, GEV fit, Fréchet transform, madogram, `hclust` and the selection rule. On the same full Figure 9 input, Thorsten's R code (run offline on albedo for validation only) and weatherisk give the same `k_edc`. The partitions must have ARI = 1, or differ only where tied distances are merged in a different order, and that must be shown.
+- F2, asserted. The LEC clustering stage is deterministic once the smoothed estimates are given. R's ellipse distance and clustering, run on weatherisk's full-data smoothed estimates, give weatherisk's `q30` and `k_lec` exactly. The indexing bug in R's `calc_distance_ellipses` is handled the way the paper describes.
+- F3, reported. Local MLE uses random starts on a flat likelihood, so `k_lec` is a random quantity. Report `k_lec` and the ARI between partitions over several optimizer seeds if HPC time allows, otherwise for one seed with that limitation stated. Contzen et al.'s `k_lec = 24` is reported next to it, not used as a target.
+- F4, reported. Compare the `k` values and maps with Contzen et al. (2025). Describe every difference and attribute it only to a cause that has been tested, otherwise call it untested.
+- F5, reported. Figure 2 (stripes) has known true parameters. Report the recovered `k` and the ARI against the true stripe partition, and compare them with the earlier version of the figure.
+
 **You see.**
 
 - [ ] A short comparison note, `docs/software_x/final/python_vs_r_results.md`, with both k values, the ARI and side-by-side maps.
