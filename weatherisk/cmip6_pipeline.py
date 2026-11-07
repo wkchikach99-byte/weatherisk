@@ -43,6 +43,7 @@ from scipy.spatial.distance import cdist, pdist, squareform
 from scipy.stats import rankdata
 
 from weatherisk.extremes import fit_gev, to_frechet
+from weatherisk.stl import stl
 from weatherisk.clustering import (
     calc_distance_ellipses,
     clustering,
@@ -435,28 +436,13 @@ def _compute_frechet_one(am_flat: np.ndarray, cidx: int):
 # ══════════════════════════════════════════════════════════════════
 
 # Module-level worker for multiprocessing (must be picklable).
-_stl_globals: dict = {}
+_STL_CHUNK = 500  # cells per batch: about 0.17 GB peak at n = 1872
 
 
-def _stl_worker_init(period: int, seasonal_window: int) -> None:
-    """Initializer for STL pool workers — stores shared params."""
-    _stl_globals["period"] = period
-    _stl_globals["seasonal_window"] = seasonal_window
-
-
-def _stl_one(args):
-    """Run STL on a single grid cell (i, j, timeseries)."""
-    from statsmodels.tsa.seasonal import STL
-
-    i, j, ts = args
-    fit = STL(
-        ts,
-        period=_stl_globals["period"],
-        seasonal=_stl_globals["seasonal_window"],
-        seasonal_deg=0,
-        robust=True,
-    ).fit()
-    return i, j, ts - fit.trend
+def _stl_detrend_chunk(args):
+    """Subtract the robust periodic STL trend from a (n_months, k) block."""
+    start, block, period = args
+    return start, block - stl(block, period, "periodic", robust=True).trend
 
 
 def _detrend_grid_fast(
@@ -469,9 +455,11 @@ def _detrend_grid_fast(
 ) -> np.ndarray:
     """De-trend precipitation grid using STL (Cleveland et al. 1990).
 
-    Matches R's ``stl(ts, s.window = "periodic", robust = TRUE)``:
-    the trend component is estimated via STL and subtracted, keeping
-    the seasonal cycle and residual.
+    Subtracts the trend of R's ``stl(ts(x, frequency = period),
+    s.window = "periodic", robust = TRUE)`` from every cell, computed by
+    :func:`weatherisk.stl.stl`, a port of R's Fortran that agrees with
+    R 4.5.2 to rounding (see tests/test_stl_r_parity.py). The seasonal
+    cycle and the remainder stay in the output.
 
     Parameters
     ----------
@@ -497,73 +485,39 @@ def _detrend_grid_fast(
     t0 = time.time()
     n_months, n_lat, n_lon = pr.shape
     total = n_lat * n_lon
+    flat = pr.reshape(n_months, total)
+    detrended = np.empty((n_months, total), dtype=np.float64)
+    tasks = [(s, np.ascontiguousarray(flat[:, s:s + _STL_CHUNK], dtype=np.float64),
+              period) for s in range(0, total, _STL_CHUNK)]
 
-    # s.window="periodic" -> seasonal window = n_months (or larger),
-    # seasonal_deg=0 to match R's constant seasonal LOESS.
-    seasonal_window = n_months + 1 if n_months % 2 == 0 else n_months
-    detrended = np.empty_like(pr)
-
-    # Progress every ~5 % or every 500 cells, whichever is smaller;
-    # but at least every 50 cells to avoid spamming on tiny grids.
-    prog_interval = max(50, min(500, total // 20))
-
-    if n_workers > 1:
+    def report(done):
         if verbose:
-            print(f"  {total} cells, {n_workers} workers, "
-                  f"seasonal={seasonal_window}")
-        tasks = [
-            (i, j, pr[:, i, j])
-            for i in range(n_lat) for j in range(n_lon)
-        ]
-        # Scale chunksize with grid: ~4 chunks per worker for good balance.
-        chunksize = max(1, total // (n_workers * 4))
-        with Pool(
-            n_workers,
-            initializer=_stl_worker_init,
-            initargs=(period, seasonal_window),
-        ) as pool:
-            for count, (i, j, dt) in enumerate(
-                pool.imap_unordered(_stl_one, tasks, chunksize=chunksize)
-            ):
-                detrended[:, i, j] = dt
-                done = count + 1
-                if verbose and (done % prog_interval == 0 or done == total):
-                    elapsed = time.time() - t0
-                    rate = done / elapsed if elapsed > 0 else 0
-                    eta = (total - done) / rate if rate > 0 else 0
-                    print(f"    {done:6d}/{total} "
-                          f"({100 * done / total:5.1f}%)  "
-                          f"{rate:.0f} cells/s  "
-                          f"ETA {eta:.0f}s  "
-                          f"[{elapsed:.0f}s]")
+            elapsed = time.time() - t0
+            print(f"    {done:6d}/{total} ({100 * done / total:5.1f}%)  "
+                  f"[{elapsed:.0f}s]")
+
+    done = 0
+    if n_workers > 1 and len(tasks) > 1:
+        with Pool(n_workers) as pool:
+            for s, dt in pool.imap_unordered(_stl_detrend_chunk, tasks):
+                detrended[:, s:s + dt.shape[1]] = dt
+                done += dt.shape[1]
+                report(done)
     else:
-        # Serial path: set globals directly in this process.
-        _stl_globals["period"] = period
-        _stl_globals["seasonal_window"] = seasonal_window
-        for count, (i, j) in enumerate(
-            (i, j) for i in range(n_lat) for j in range(n_lon)
-        ):
-            _, _, dt = _stl_one((i, j, pr[:, i, j]))
-            detrended[:, i, j] = dt
-            done = count + 1
-            if verbose and (done % prog_interval == 0 or done == total):
-                elapsed = time.time() - t0
-                rate = done / elapsed if elapsed > 0 else 0
-                eta = (total - done) / rate if rate > 0 else 0
-                print(f"    {done:6d}/{total} "
-                      f"({100 * done / total:5.1f}%)  "
-                      f"{rate:.0f} cells/s  "
-                      f"ETA {eta:.0f}s  "
-                      f"[{elapsed:.0f}s]")
+        for task in tasks:
+            s, dt = _stl_detrend_chunk(task)
+            detrended[:, s:s + dt.shape[1]] = dt
+            done += dt.shape[1]
+            report(done)
 
     if verbose:
         elapsed = time.time() - t0
         print(f"  Grid: {n_lat} x {n_lon} = {total} cells")
-        print(f"  STL period={period}, seasonal={seasonal_window}, robust=True")
+        print(f"  STL period={period}, s.window=periodic, robust=True")
         print(f"  Workers: {n_workers}")
         print(f"  Elapsed: {elapsed:.1f}s")
 
-    return detrended
+    return detrended.reshape(pr.shape).astype(pr.dtype, copy=False)
 
 
 # ══════════════════════════════════════════════════════════════════
