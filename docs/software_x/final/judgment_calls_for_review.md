@@ -118,7 +118,7 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
    | Our choice, years 1850–2014 | 138 | 137 |
    | **No detrending** | **104** | **106** |
 
-   Correction. The no-detrending row was computed with tied maxima ranked by SciPy `method="max"`. The reference code's rule is equivalent to `method="min"` (item E6), and the two differ in the 231 cells with tied maxima. The row is being recomputed with `"min"` and with weatherisk's average ranks. The detrended rows have no ties and are unaffected.
+   Correction. The no-detrending row was first computed with tied maxima ranked by SciPy `method="max"`, not the reference code's rule (equivalent to `method="min"`, item E6). The recomputation (job 48932523) gives the same k under all three rules: 104 (SciPy) and 106 (R order) for `"min"`, `"average"` and `"max"`, with identical q30 0.160726 and identical k(p) curves. The ties are small. Of the 231 tied cells, the median loses 1 year to ties and the worst loses 6; no tied value is zero; the rank of any year changes by at most 4 of 156 between rules (measured). The detrended rows have no ties.
 
    Tie-breaking alone moves k by about 2 (item A5), so 104 and 106 are the same result.
    k is steep in the quantile level. For our choice, k = 104 needs a level of about 0.34 instead of 0.30.
@@ -127,7 +127,7 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
    This is consistent with the published EDC result having been computed without the STL step, or with maxima taken from the raw series. It does not prove it.
    Only J. Contzen's script for Sect. 5 can settle it.
    A further check is the LEC count on the non-detrended input (the paper reports 24).
-   Both full Fig. 9 runs were submitted on 2026-11-07 from commit 7561a6e, 50 local-MLE starts, 16 CPUs, qos 48h: job 48932143 with STL, job 48932144 with `--no-detrend`. Results pending.
+   Both full Fig. 9 runs were submitted on 2026-11-07 from commit 7561a6e, 50 local-MLE starts, 16 CPUs, qos 48h: job 48932143 with STL, job 48932144 with `--no-detrend`. Measured on the step-2 checkpoint (job 48932524), step 3 with 50 starts costs 110 s per cell (101 to 116 s over 6 cells), about 35 h on 16 workers, and step 3 writes its checkpoint only at the end. Both jobs were cancelled before step 3 could finish and resubmitted from the step-2 checkpoint with 64 CPUs and 240 GB: job 48932578 with STL, job 48932579 with `--no-detrend`. Expected step 3 at 64 workers is about 9 h (guess, linear scaling). Results pending.
 
 5. **What the SoftwareX paper should say.** v23.tex line ~743 currently says "we attribute this primarily to differences in preprocessing". This has not been tested. Proposed replacement, not yet in the paper:
    "Contzen et al. do not state their STL settings. With the STL settings used here, the deterministic EDC chain gives k_EDC between 137 and 147 across the variants we tried. Without detrending it gives 104 to 106, depending only on how ties in the dendrogram are broken."
@@ -135,6 +135,6 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
 
 6. **Rank rule for tied maxima.** `c_extrcoeff_matrix` ranks each year as `sum(x[k] <= x)`, the number of years with a maximum at least as large. The madogram uses only rank differences, so this is equivalent to SciPy `rankdata(method="min")`. A check on tied integer data matched R bitwise with `"min"` and not with `"max"` or `"average"`.
    weatherisk uses average ranks. The rules differ only when a cell has tied annual maxima. That happens in 231 cells without detrending and in none with STL, so the STL results and the F1 check are unaffected.
-   Options. Switch weatherisk to `"min"` to match the reference code exactly, or keep average ranks (the usual choice for an empirical copula) and document the difference.
+   Effect on the full grid (job 48932523). Without detrending, k is 104 (SciPy) and 106 (R order) under `"min"`, `"average"` and `"max"`. The rule does not change k here. Options. Switch weatherisk to `"min"` to match the reference code exactly, or keep average ranks (the usual choice for an empirical copula) and document the difference. Neither changes any number reported so far.
 
 7. `docs/maternity_leave_progress_update_june2026.md:37` lists "104 EDC / 24 LEC" as our reproduction. That was never our result. The file is your June report, so it was left unchanged.
