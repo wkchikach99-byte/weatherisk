@@ -16,12 +16,6 @@ authors = [
 ]
 keywords = ["climate", "risk", "extreme-value", "max-stable", "clustering"]
 
-[project.urls]
-Homepage = "https://github.com/wkchikach99-byte/weatherisk"
-Repository = "https://github.com/wkchikach99-byte/weatherisk"
-"Bug Tracker" = "https://github.com/wkchikach99-byte/weatherisk/issues"
-"Zenodo DOI" = "https://doi.org/10.5281/zenodo.20108563"
-
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -42,6 +36,12 @@ dependencies = [
     "h5py>=3.8",
     "statsmodels>=0.14",
 ]
+
+[project.urls]
+Homepage = "https://github.com/wkchikach99-byte/weatherisk"
+Repository = "https://github.com/wkchikach99-byte/weatherisk"
+"Bug Tracker" = "https://github.com/wkchikach99-byte/weatherisk/issues"
+"Zenodo DOI" = "https://doi.org/10.5281/zenodo.20108563"
 
 [project.optional-dependencies]
 dev = [
