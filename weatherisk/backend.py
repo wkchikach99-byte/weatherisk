@@ -68,6 +68,18 @@ def calc_distance_ellipses_condensed(
 
 # ── Full optimizer loops ─────────────────────────────────────────────────
 
+# Counted starts of the local MLE, shared by every pipeline config.
+# The smallest budget measured to reach R's likelihood at every frozen
+# reference cell for 20 seeds; see scripts/optimizer_start_sweep.py.
+LOCAL_MLE_ENSEMBLE = 50
+
+
+def _local_mle_starts(n: int, seed: int) -> np.ndarray:
+    """Return ``n`` start points of the local MLE in the unit cube."""
+    from scipy.stats import qmc
+
+    return qmc.LatinHypercube(d=3, seed=seed).random(n=n)
+
 
 def _nll_and_grad_factory(zi, zj, xl, yl, df, alpha, parscale):
     """Return an (f, jac_flag) callable for SciPy minimize.
@@ -137,7 +149,7 @@ def optimize_local_mle(
     yl: np.ndarray,
     df: float,
     alpha: float,
-    ensemble: int = 5,
+    ensemble: int = LOCAL_MLE_ENSEMBLE,
     seed: int = 42,
     max_boundary_retries: int = 5,
     lower_bounds: tuple[float, float] = (0.01, 0.01),
@@ -182,9 +194,8 @@ def optimize_local_mle(
             options={"maxiter": 10000, "ftol": 1e-10},
         )
 
-    sampler = qmc.LatinHypercube(d=3, seed=seed)
     starts_scaled = qmc.scale(
-        sampler.random(n=ensemble + max_boundary_retries),
+        _local_mle_starts(ensemble + max_boundary_retries, seed),
         lo / parscale, hi / parscale,
     )
 

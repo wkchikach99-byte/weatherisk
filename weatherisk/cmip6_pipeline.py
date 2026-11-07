@@ -49,6 +49,7 @@ from weatherisk.clustering import (
     cluster_number_threshold_method,
 )
 from weatherisk.backend import (
+    LOCAL_MLE_ENSEMBLE,
     calc_distance_ellipses_condensed,
 )
 from weatherisk.cmip6_data import (  # noqa: F401  (ensure_cmip6_data re-exported; patched by benchmarks)
@@ -84,7 +85,7 @@ class CMIP6Config:
     # Local estimation — ε = 5 grid point distance
     neighbor_radius: float = 5.0   # ε  in grid-point units
     smoothing_radius: float = 2.0  # spatial smoothing in grid-point units
-    mle_ensemble: int = 5          # multi-start restarts; strict parity status is tracked in docs/python_r_parity_migration_plan.md
+    mle_ensemble: int = LOCAL_MLE_ENSEMBLE  # counted local-MLE starts
     max_boundary_retries: int = 5  # retry budget when optimum hits bounds
 
     # Clustering (§5)

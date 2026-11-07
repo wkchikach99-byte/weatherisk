@@ -12,6 +12,8 @@ from typing import Callable
 
 import numpy as np
 
+from weatherisk.backend import LOCAL_MLE_ENSEMBLE
+
 
 @dataclass
 class ParameterPreset:
@@ -25,7 +27,7 @@ class ParameterPreset:
     a_func: Callable = field(default=lambda: (lambda X, Y: np.full_like(X, 2.0)))
     b_func: Callable = field(default=lambda: (lambda X, Y: np.zeros_like(X)))
     g_func: Callable = field(default=lambda: (lambda X, Y: np.zeros_like(X)))
-    locest_ensemble: int = 3
+    locest_ensemble: int = LOCAL_MLE_ENSEMBLE
     locest_abst: int = 3
     smoothing_dist: int = 1
 
@@ -40,7 +42,6 @@ _PRESETS: dict[str, ParameterPreset] = {
         a_func=lambda X, Y: np.full_like(X, 2.0),
         b_func=lambda X, Y: (X + 5.0) / 10.0 * 5.0,
         g_func=lambda X, Y: np.zeros_like(X),
-        locest_ensemble=5,
         locest_abst=4,
         smoothing_dist=2,
     ),
@@ -53,7 +54,6 @@ _PRESETS: dict[str, ParameterPreset] = {
         a_func=lambda X, Y: (7.5 - np.sqrt(X**2 + Y**2)) / 2.0 + 1.0,
         b_func=lambda X, Y: np.zeros_like(X),
         g_func=lambda X, Y: np.zeros_like(X),
-        locest_ensemble=5,
         locest_abst=4,
         smoothing_dist=2,
     ),
@@ -66,7 +66,6 @@ _PRESETS: dict[str, ParameterPreset] = {
         a_func=lambda X, Y: np.full_like(X, 1.0),
         b_func=lambda X, Y: np.full_like(X, 3.0),
         g_func=lambda X, Y: -(X / 5.0) * (np.pi / 2.0),
-        locest_ensemble=5,
         locest_abst=4,
         smoothing_dist=2,
     ),
@@ -82,7 +81,6 @@ _PRESETS: dict[str, ParameterPreset] = {
         a_func=lambda X, Y: np.full_like(X, 2.0),
         b_func=lambda X, Y: (X + 5.0) / 2.0,
         g_func=lambda X, Y: np.zeros_like(X),
-        locest_ensemble=5,
         locest_abst=4,
         smoothing_dist=4,
     ),
@@ -95,7 +93,6 @@ _PRESETS: dict[str, ParameterPreset] = {
         a_func=lambda X, Y: np.full_like(X, 1.0),
         b_func=lambda X, Y: np.full_like(X, 3.0),
         g_func=lambda X, Y: -(X / 5.0) * (np.pi / 2.0),
-        locest_ensemble=5,
         locest_abst=4,
         smoothing_dist=4,
     ),
@@ -108,7 +105,6 @@ _PRESETS: dict[str, ParameterPreset] = {
         a_func=lambda X, Y: (7.5 - np.sqrt(X**2 + Y**2)) / 2.0 + 1.0,
         b_func=lambda X, Y: np.zeros_like(X),
         g_func=lambda X, Y: np.zeros_like(X),
-        locest_ensemble=5,
         locest_abst=4,
         smoothing_dist=4,
     ),

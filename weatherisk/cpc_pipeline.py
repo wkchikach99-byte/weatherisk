@@ -39,6 +39,7 @@ import numpy as np
 from scipy.cluster.hierarchy import fcluster
 from scipy.stats import rankdata
 
+from weatherisk.backend import LOCAL_MLE_ENSEMBLE
 from weatherisk.extremes import block_maxima, fit_gev, to_frechet
 from weatherisk.clustering import (
     calc_distance_ellipses,
@@ -84,7 +85,7 @@ class PipelineConfig:
     # Local estimation  (§3.2) — normalised-coordinate units
     neighbor_radius: float = 3.0  # ε  neighbourhood for pairwise CL
     smoothing_radius: float = 2.0 # spatial smoothing
-    mle_ensemble: int = 5         # multi-start L-BFGS-B; strict parity status is tracked in docs/python_r_parity_migration_plan.md
+    mle_ensemble: int = LOCAL_MLE_ENSEMBLE  # counted local-MLE starts
     max_boundary_retries: int = 5 # retry budget when optimum hits bounds
 
     # Clustering  (§3.3)
