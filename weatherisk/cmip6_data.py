@@ -342,18 +342,21 @@ def load_monthly_precipitation(
     files = ensure_cmip6_data(data_dir, verbose=verbose)
 
     _log(f"\n  Loading {len(files)} file(s) …", verbose)
-    ds = xr.open_mfdataset(files, combine="by_coords")
-
-    # Select time range
     time_sel = slice(f"{year_start}-01-01", f"{year_end}-12-31")
-    ds = ds.sel(time=time_sel)
-
-    pr = ds["pr"].values.astype(np.float64)
-    times = ds["time"].values
-    lats = ds["lat"].values
-    lons = ds["lon"].values
-
-    ds.close()
+    prs, time_parts = [], []
+    for path in sorted(files):
+        with xr.open_dataset(path) as ds:
+            ds = ds.sel(time=time_sel)
+            if ds.sizes["time"]:
+                prs.append(ds["pr"].values.astype(np.float64))
+                time_parts.append(ds["time"].values)
+                lats = ds["lat"].values
+                lons = ds["lon"].values
+    if not prs:
+        raise ValueError(f"No months in {year_start}-{year_end} in {data_dir}")
+    order = np.argsort(np.concatenate([t[:1] for t in time_parts]), kind="stable")
+    pr = np.concatenate([prs[i] for i in order])
+    times = np.concatenate([time_parts[i] for i in order])
 
     _log(f"  Loaded: shape={pr.shape}, "
          f"lat=[{lats.min():.1f}, {lats.max():.1f}], "
