@@ -25,9 +25,11 @@ abstract: >
   extracted and fitted with generalised extreme-value (GEV) distributions;
   marginals are transformed to unit Fréchet scale and local spatial-dependence
   parameters are estimated before grid cells are partitioned into coherent
-  regions. Two clustering schemes are supported — Local Estimates Clustering
-  (LEC) and Extremal Dependence Clustering (EDC) — each validated against an
-  established R reference implementation.
+  regions. Two clustering schemes are supported, Local Estimates Clustering
+  (LEC) and Extremal Dependence Clustering (EDC). The test suite compares each
+  pipeline stage with stored outputs of the reference R implementation of
+  Contzen et al. (2025), so R is not needed to install, run, or test the
+  package.
 
 keywords:
   - spatial extremes

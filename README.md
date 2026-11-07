@@ -1,25 +1,31 @@
 # weatherisk
 
+[![Tests](https://github.com/wkchikach99-byte/weatherisk/actions/workflows/tests.yml/badge.svg)](https://github.com/wkchikach99-byte/weatherisk/actions/workflows/tests.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20108563.svg)](https://doi.org/10.5281/zenodo.20108563)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+
 ## Dir structure
 
 ```
-docs/ - the papers we are writing for a PhD, all in latex format
+docs/ - papers and thesis chapters (LaTeX)
   phd_thesis/ - the main PhD thesis, in progress
-  softwarex/ - a paper for the SoftwareX publication about the code we're writing for the PhD thesis, in progress
-refernce_papers/ - papers we use as reference in our PhD work, with important methodology that we reuse and build on
-weatherisk/ - the main python code base, which is the target code
-r_code/ - the historical code base used in the reference papers by Justus, that we have refactored to python and built upon in python
-scripts/ - scripts to produce some figures for our papers
-data/ - data we've downloaded and using in our modelling. precipitation data, heat data, and more.
-meeting_notes/ - meeting notes with the supervisors with feedback on the papers and the code
-
+  software_x/ - the SoftwareX paper about this package
+reference_papers/ - reference papers used in the PhD work
+weatherisk/ - the main Python package source code
+r_code/ - the original R reference implementation (Contzen et al.)
+scripts/ - figure-reproduction and benchmarking scripts
+data/ - downloaded climate data (precipitation, heat)
+tests/ - pytest test suite
+notebooks/ - quickstart Jupyter notebook
+meeting_notes/ - supervisor meeting notes (not in public repo)
 ```
 
 **Climate risk analysis via max-stable process clustering.**
 
 `weatherisk` is a Python package that models the spatial dependence structure of climate extremes (heatwaves, heavy precipitation) using max-stable processes. It estimates local anisotropy parameters, clusters grid cells by dependence similarity, and computes tail-risk metrics (VaR, ES) per cluster.
 
-The package consolidates an R + Shell/SLURM + Python workflow into a single, tested, pip-installable library with a CLI.
+The package replaces the R, shell and SLURM scripts of the original workflow of Contzen et al. (2025) with a single pip-installable Python library and a CLI. R is not needed to install, run, or test the package. The tests compare against outputs that the reference R implementation produced once and that are stored in `tests/reference_data/`.
 
 ## Installation
 
@@ -202,10 +208,14 @@ weatherisk cmip6 --data-dir /pool/data/CMIP6/.../pr/gn/
 | `grid` | 2-D regular grid, index conversions (`grid_number`, `number_grid`, `koord_num`, `number_koord`), column-major (Fortran-order) flattened coordinates (`X_flat`, `Y_flat`), `rad()`/`deg()` |
 | `covariance` | Stationary (`cov_fkt_2d`) and non-stationary (`cov_fkt_2d_nonstat2`) anisotropic covariance; extremal-coefficient conversions (`cov_to_ec`, `ec_to_cov`) |
 | `simulation` | Max-stable process simulation via spectral representation (`sim_expt_2d`, `sim_expt_2d_nonstat`) |
-| `density` | Pairwise composite likelihood (`pairwise_density_summand`); global and local MLE optimisation with R-matching heuristics (parscale, gamma-wrapping retry, boundary-proximity retry) |
+| `density` | Pairwise composite likelihood (`pairwise_density_summand`); global and local MLE optimisation with the heuristics of the R reference (parscale, gamma-wrapping retry, boundary-proximity retry) |
+| `backend` | NumPy and SciPy kernels shared by the pipelines: summed pairwise negative log-likelihood, ellipse dissimilarity wrappers, multistart L-BFGS-B optimisers |
 | `estimation` | Spatial smoothing of local estimates (angular wrapping for γ); in-cluster re-estimation with average log-likelihood computation |
 | `clustering` | Ellipse-overlap dissimilarity (`calc_distance_ellipses`); madogram-based Saunders method (`c_extrcoeff_matrix`, column-major flatten); hierarchical clustering; threshold-based *k* selection |
 | `extremes` | Block-maxima extraction, GEV fitting, Fréchet transform |
+| `cmip6_pipeline` | AWI-ESM-1-1-LR Figure 9 pipeline (`CMIP6Config`, `run_cmip6_pipeline`) with checkpoint-and-resume |
+| `cmip6_data` | Discovery, download, and loading of AWI-ESM-1-1-LR monthly precipitation files |
+| `risk` | Value at Risk and Expected Shortfall per cluster |
 | `cpc_pipeline` | End-to-end CPC real-data pipeline: load CPC files → GEV → Fréchet → LEC/EDC clustering → risk → Cartopy maps |
 | `map_plotting` | Filled-region Cartopy maps (pcolormesh): cluster maps, parameter fields, risk choropleths, summary panels |
 | `gdp` | Gridded GDP exposure loading (Kummu et al. 2018), regridding to pipeline grid, cell-level extraction |
@@ -215,7 +225,7 @@ weatherisk cmip6 --data-dir /pool/data/CMIP6/.../pr/gn/
 | `plotting` | Heatmaps, cluster maps, dendrograms, choropleth, bar charts (synthetic data) |
 | `pipeline` | Synthetic orchestration: lightweight validation (`run_pipeline`) and full non-stationary study (`run_nonstationary_pipeline`) |
 | `cli` | Click-based CLI entry point with `validate`, `maps`, and `cmip6` |
-| `io` | CSV, NumPy, and RDS I/O helpers |
+| `io` | CSV and NumPy I/O helpers; optional reading of R `.rds` files through `pyreadr` (no R installation needed) |
 
 ## Parameter Presets
 
@@ -286,7 +296,10 @@ The pairwise-comparison stage grows **quadratically** in cell count: moving from
 ~10⁴. GPU acceleration, sparse graph-based strategies, or approximate nearest-
 neighbour methods will be required for next-generation Earth system simulations.
 
-### SLURM configuration (validated production run, job 42260990)
+### SLURM configuration (production run, job 42260990)
+
+Job 42260990 ran before the R runtime was removed from the package. Its environment loaded R 4.2.2. A rerun with the pure-Python package is pending.
+<!-- TODO(U6): replace with the pure-Python rerun (job id, run time, memory, k values) -->
 
 | Parameter | Value |
 |---|---|
@@ -313,16 +326,18 @@ sbatch hpc/run_fig9_clean.slurm
 # Check job status
 squeue -u $USER
 
-# Resume from checkpoint (if interrupted)
-weatherisk cmip6 --workers 16 --resume
+# Resume after an interruption: rerun the same command.
+# The pipeline loads the checkpoints in output/cmip6_fig9/checkpoints/.
+weatherisk cmip6 --workers 16
 ```
 
 Each run is tagged with a unique SLURM job ID; all output files are written to
 `output/cmip6_fig9/` and can be traced back to a specific job submission via
 checkpoint files in `output/cmip6_fig9/checkpoints/`.
 
-### Validated result (job 42260990)
+### Result of job 42260990
 
+<!-- TODO(U6): pure-Python rerun -->
 - Grid: T63 (18,432 cells), 156 years, completed in ≈4 hours on 16 cores
 - Peak memory: < 2 GiB (well within the 220 GiB allocation)
 - Cluster counts: k_LEC = 21, k_EDC = 142
@@ -340,20 +355,16 @@ python -m pytest tests/ -v
 python -m pytest tests/ --cov=weatherisk --cov-report=term-missing
 ```
 
-105 tests covering all modules:
+<!-- TODO(U4): add test counts per file from the final test inventory -->
+None of the tests calls R. The R comparisons read frozen outputs in `tests/reference_data/`, which the reference R implementation produced once. Each stage is held to a criterion that an independent implementation can meet:
 
-- **55 unit tests** for all modules using small synthetic grids (5×5 and 10×10) with fixed seeds.
-- **28 cross-validation tests** (`test_r_cross_validation.py`) that load reference CSV data generated by the original R code and assert numerical equivalence at every pipeline stage (grid, covariance, density, madogram, clustering, log-likelihood).
-- **22 R-parity fix tests** (`test_r_parity_fixes.py`) verifying the five algorithmic fixes that align Python with R's optimisation heuristics:
-  - Column-major (Fortran-order) grid indexing matching R's `grid_number`/`number_grid`
-  - `X_flat`/`Y_flat` properties using Fortran-order flattening
-  - Parameter rescaling (`parscale = (upper - lower) / 100`) in both local and global optimisers
-  - Gamma-wrapping retry when γ hits the ±π/2 boundary
-  - Boundary-proximity retry (up to 5 extra LHS starts when parameters are near bounds)
-  - Average log-likelihood computation in `calc_estimates_in_clusters` (column 4)
-  - Column-major reshape in `c_extrcoeff_matrix` matching R's `as.vector()`
+- **Deterministic functions** (covariance, extremal-coefficient conversions, pairwise likelihood summands, madogram, ellipse-overlap distance, LEC merge heights) must match the R outputs to near machine precision on identical inputs. See `tests/parity/` and `tests/test_r_cross_validation.py`.
+- **Local optimiser.** At every cell of the mini AWI-ESM-1-1-LR subset (5×5 grid, 20 years), the summed pairwise negative log-likelihood at the Python optimum may exceed its value at R's optimum by at most 0.03. Parameter values are not compared. With 20 annual maxima per cell the likelihood is nearly flat in `b` and γ where `a` is at its lower bound, so very different parameters reach the same likelihood. See `tests/test_cmip6_rparity.py`.
+- **LEC clustering** receives R's smoothed local estimates and must reproduce R's quantile threshold and cluster count *k* exactly.
+- **EDC (Saunders) clustering** may differ from R's `hclust` only in how ties between equal distances are broken.
+- **Structural tests** cover simulation properties, checkpoint-and-resume, serial and parallel equivalence, and parameter presets.
 
-R reference data is generated by `tests/generate_r_reference.R` (requires R ≥ 4.0 with `lhs` package).
+To regenerate the fixtures, run `tests/generate_r_reference.R` and `tests/generate_cmip6_mini_reference.R`. This step needs R ≥ 4.0 with the `lhs` package. Running the tests does not.
 
 ## License
 
