@@ -97,6 +97,9 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
 1. **Which code and paper.** The 104 is from Contzen et al., Extremes 28:713–737 (2025), Sect. 5 and the Fig. 9 caption.
    `r_code/main.pdf` is byte-identical to the June 2023 preprint (`reference_papers/regionalization-approaches-for-the-spatial-analysis.pdf`), which has no climate application.
    So `r_code/` is the simulation-study code. It has no script for the 104.
+   A grep of `r_code/` for STL, detrending, GEV fitting, NetCDF reading and precipitation finds none of them.
+   The STL settings in weatherisk (`s.window = "periodic"`, `robust = TRUE`, subtract the trend) come from our own R scripts of March 2026 (`tests/generate_cmip6_mini_reference.R`, `scripts/replay_fig9_benchmark_in_r.R`), not from J. Contzen.
+   His only public code is the Zenodo record 10.5281/zenodo.7413932 for Contzen, Dickhaus, Lohmann, PLOS ONE 2023. Its R files (`main.R`, `functions.R`, `import_*.R`) contain no STL or detrending call; the only grep matches are "coastlines". That paper states that it makes no seasonality adjustment. It is a different application (daily temperature, time-dependent GEV), so this does not show what was done for Sect. 5.
    Our R number, 140, is Contzen et al.'s unchanged madogram, hclust and k functions applied to our own preprocessing (`hpc/r_reference/r_edc_fullgrid.R`).
 
 2. **What the paper leaves open.** The STL settings, whether the seasonal part is removed, the ensemble member and the exact data product.
@@ -121,7 +124,8 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
 4. **Reading.** The published 104 is reproduced when the annual maxima are taken from the monthly series without detrending, and by none of the six detrended variants.
    This is consistent with the published EDC result having been computed without the STL step, or with maxima taken from the raw series. It does not prove it.
    Only J. Contzen's script for Sect. 5 can settle it.
-   A further check is the LEC count on the non-detrended input (the paper reports 24). It needs a full Fig. 9 run, about 30 h on albedo, and has not been run.
+   A further check is the LEC count on the non-detrended input (the paper reports 24).
+   Both full Fig. 9 runs were submitted on 2026-11-07 from commit 7561a6e, 50 local-MLE starts, 16 CPUs, qos 48h: job 48932143 with STL, job 48932144 with `--no-detrend`. Results pending.
 
 5. **What the SoftwareX paper should say.** v23.tex line ~743 currently says "we attribute this primarily to differences in preprocessing". This has not been tested. Proposed replacement, not yet in the paper:
    "Contzen et al. do not state their STL settings. With the STL settings used here, the deterministic EDC chain gives k_EDC between 137 and 147 across the variants we tried. Without detrending it gives 104 to 106, depending only on how ties in the dendrogram are broken."
