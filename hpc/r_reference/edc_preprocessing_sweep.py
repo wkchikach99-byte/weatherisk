@@ -11,8 +11,10 @@ This script reruns the deterministic EDC chain under each plausible reading:
 
 The margin transform (GEV to unit Frechet) is skipped because a strictly
 increasing transform does not change ranks, and the madogram of the reference
-code (c_extrcoeff_matrix) uses ranks only. Ranks follow that code,
-rank = #{values <= x}, which is scipy's method="max".
+code (c_extrcoeff_matrix) uses ranks only. That code ranks
+sum(x[k] <= x) = #{values >= x}, i.e. n + 1 - rankdata(method="min"). The
+madogram uses only rank differences, so this equals scipy's method="min".
+The two differ only for cells with tied maxima, which occur without detrending.
 
 k is reported twice. "scipy" is weatherisk's linkage. "R" is
 r_hclust_average from linkage_tie_check.py, which reproduced R hclust's
@@ -93,10 +95,10 @@ def detrend(flat: np.ndarray, spec: dict, workers: int) -> np.ndarray:
     return out
 
 
-def edc_k(monthly: np.ndarray, quantile: float = 0.30) -> dict:
+def edc_k(monthly: np.ndarray, quantile: float = 0.30, rank_method: str = "min") -> dict:
     n_years = monthly.shape[0] // 12
     maxima = monthly.reshape(n_years, 12, -1).max(axis=1)
-    ranks = rankdata(maxima, method="max", axis=0).T.astype(np.float64)
+    ranks = rankdata(maxima, method=rank_method, axis=0).T.astype(np.float64)
     tied_cells = int(np.sum([np.unique(maxima[:, c]).size < n_years
                              for c in range(maxima.shape[1])]))
     sums = pdist(ranks, metric="cityblock")
@@ -145,6 +147,12 @@ def main() -> None:
     for name, spec in VARIANTS.items():
         t0 = time.time()
         report(name, edc_k(detrend(flat, spec, args.workers)), time.time() - t0)
+
+    raw = detrend(flat, VARIANTS["no detrending"], args.workers)
+    for method, label in (("average", "weatherisk average ranks"),
+                          ("max", "method max, as in the first sweep")):
+        t0 = time.time()
+        report(f"no detrending, {label}", edc_k(raw, rank_method=method), time.time() - t0)
 
     t0 = time.time()
     base = VARIANTS["base: periodic, robust, x - trend"]
