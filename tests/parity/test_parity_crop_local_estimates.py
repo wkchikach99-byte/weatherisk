@@ -1,32 +1,12 @@
-"""Strict R-parity test for: crop_local_estimates
-
-Added: 2026-03-11
-Status: FAILING — no Python implementation exists
+"""R-parity test for: crop_local_estimates
 
 R function: crop_local_estimates in r_code/functions.R
-Python equivalent: NOT YET IMPLEMENTED
+Python equivalent: weatherisk.estimation.crop_local_estimates
 
-Acceptance standard (docs/python_r_parity_migration_plan.md):
-    max |Python - R| < 1e-14
+Criterion: deterministic, max |Python - R| < 1e-14 (STRICT_ATOL).
 
-Current status:
-    A1 (Python equivalent exists): FALSE — no implementation found
-    A2 (Raw R fixtures exist):     FALSE
-    A3 (Strict tests pass):        FALSE
-
-Decision (2026-03-11): This test is a placeholder. The function must
-first be implemented in Python, then raw R fixtures generated, then
-strict conformance verified.
-
-crop_local_estimates is a Tier 2 helper that extracts local parameter
-estimates for a sub-region. Used by the in-cluster re-estimation step.
-
-Next steps:
-    1. Implement crop_local_estimates in Python
-    2. Add fixture generation to tests/generate_r_reference.R
-    3. Write strict conformance test
-
-Fixture: NOT YET GENERATED
+Fixtures (frozen, from tests/generate_r_reference.R):
+    tests/reference_data/crop_local_estimates_margin{0,1,2}.csv
 """
 
 import numpy as np

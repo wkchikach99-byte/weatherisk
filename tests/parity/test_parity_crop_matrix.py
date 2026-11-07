@@ -1,33 +1,13 @@
-"""Strict R-parity test for: crop_matrix
-
-Added: 2026-03-11
-Status: FAILING — no Python implementation exists
+"""R-parity test for: crop_matrix
 
 R function: crop_matrix in r_code/functions.R
-Python equivalent: NOT YET IMPLEMENTED
+Python equivalent: weatherisk.estimation.crop_matrix
 
-Acceptance standard (docs/python_r_parity_migration_plan.md):
-    max |Python - R| < 1e-14
+Criterion: deterministic, max |Python - R| < 1e-14 (STRICT_ATOL).
 
-Current status:
-    A1 (Python equivalent exists): FALSE — no implementation found
-    A2 (Raw R fixtures exist):     FALSE
-    A3 (Strict tests pass):        FALSE
-
-Decision (2026-03-11): This test is a placeholder. The function must
-first be implemented in Python, then raw R fixtures generated, then
-strict conformance verified.
-
-crop_matrix is a Tier 2 helper that crops a matrix to a sub-region.
-It is used by higher-level functions in the clustering pipeline.
-
-Next steps:
-    1. Implement crop_matrix in Python (likely in weatherisk/grid.py
-       or weatherisk/estimation.py)
-    2. Add fixture generation to tests/generate_r_reference.R
-    3. Write strict conformance test
-
-Fixture: NOT YET GENERATED
+Fixtures (frozen, from tests/generate_r_reference.R):
+    tests/reference_data/crop_matrix_a_margin1.csv
+    tests/reference_data/crop_matrix_a_margin2.csv
 """
 
 import numpy as np

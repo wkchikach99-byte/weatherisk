@@ -37,22 +37,26 @@ Diff inventory (all resolved):
   4. optimize_local_mle lacks boundary retry    (R: up to 5 extra)     → FIXED
   5. CMIP6Config.mle_ensemble = 3               (R: 5)                → FIXED
   6. _detrend_grid_fast uses running mean       (Paper/R: STL)         → FIXED
-  7. Rust backend: jac=True (forward-diff grad) (Python: jac=False)    → FIXED (unified)
   8. _local_mle_one_cmip6: seed=42+cidx         (R: set.seed(42))     → FIXED (seed=42)
 
 Known irreducible differences:
   - GEV fitting: scipy genextreme vs R Nelder-Mead → ~0.1% Fréchet diff
   - MLE parameters: weakly identified when a≈0 (NLL surface is flat);
     different L-BFGS-B implementations + different LHS generators mean
-    exact parameter matching is impossible.  Tests compare NLL values.
-  - R calc_distance_ellipses has a bug: empty-ellipse pairs write to
-    wrong matrix position via linear indexing.  Python is correct.
+    exact parameter matching is impossible.  Optimizer outputs are judged
+    by likelihood: NLL_py <= NLL_R + 0.03 at every cell, using the
+    package's default start budget (CMIP6Config().mle_ensemble).
+  - R calc_distance_ellipses has a bug: when both ellipses are empty it
+    writes ``dist_matrix[j] = 1`` (linear index) instead of
+    ``dist_matrix[i, j] = 1``.  Python is correct.  The tests replay R's
+    write pattern to show the bug explains every differing entry.
+  - Because the full mini LEC chain depends on optimizer output, LEC
+    clustering is tested on R's own smoothed estimates, where q30 and k
+    must match R exactly.
 """
 
 from __future__ import annotations
 
-import contextlib
-import inspect
 from pathlib import Path
 
 import numpy as np
@@ -62,16 +66,6 @@ from scipy.spatial.distance import squareform
 
 REF = Path(__file__).parent / "reference_data"
 CMIP6_MINI_REF = REF / "cmip6_mini"
-
-# Backend IDs used by parametrized tests.
-_BACKENDS = ["python"]
-
-
-@contextlib.contextmanager
-def _force_backend(name: str):
-    """No-op: only the Python backend exists."""
-    yield
-
 
 def _skip_if_no_ref():
     """Skip if main R reference data has not been generated."""
@@ -123,8 +117,12 @@ def _load_cmip6_mini_inputs():
     )
 
 
-def _run_cmip6_mini_pipeline(backend: str = "python"):
-    """Run the mini CMIP6 pipeline end-to-end on the R reference input."""
+def _run_cmip6_mini_pipeline():
+    """Run the mini CMIP6 pipeline end-to-end on the R reference input.
+
+    The local MLE uses the package's default start budget, not R's
+    locest_ensemble.
+    """
     from weatherisk.cmip6_pipeline import (
         CMIP6Config,
         _detrend_grid_fast,
@@ -146,29 +144,25 @@ def _run_cmip6_mini_pipeline(backend: str = "python"):
         ),
         df=5.0,
         alpha=1.0,
-        mle_ensemble=int(
-            lec_params.loc[lec_params["parameter"] == "locest_ensemble", "value"].iloc[0]
-        ),
         quantile_threshold=0.30,
         n_workers=1,
         retain_clustering_artifacts=True,
     )
 
-    with _force_backend(backend):
-        pr_det = _detrend_grid_fast(mini["pr_3d"], period=12, n_workers=1, verbose=False)
-        annual_max, years = _monthly_annual_maxima(pr_det, mini["times"], verbose=False)
-        annual_max_flat = annual_max.reshape(annual_max.shape[0], -1, order="F")
+    pr_det = _detrend_grid_fast(mini["pr_3d"], period=12, n_workers=1, verbose=False)
+    annual_max, years = _monthly_annual_maxima(pr_det, mini["times"], verbose=False)
+    annual_max_flat = annual_max.reshape(annual_max.shape[0], -1, order="F")
 
-        frechet = np.zeros_like(annual_max_flat)
-        gev = np.zeros((annual_max_flat.shape[1], 3))
-        for s in range(annual_max_flat.shape[1]):
-            loc, scale, shape = fit_gev(annual_max_flat[:, s])
-            gev[s] = [loc, scale, shape]
-            frechet[:, s] = to_frechet(annual_max_flat[:, s], loc, scale, shape)
+    frechet = np.zeros_like(annual_max_flat)
+    gev = np.zeros((annual_max_flat.shape[1], 3))
+    for s in range(annual_max_flat.shape[1]):
+        loc, scale, shape = fit_gev(annual_max_flat[:, s])
+        gev[s] = [loc, scale, shape]
+        frechet[:, s] = to_frechet(annual_max_flat[:, s], loc, scale, shape)
 
-        raw = _run_local_estimation_cmip6(frechet, mini["grid_coords"], cfg, verbose=False)
-        smoothed = _smooth_estimates_cmip6(raw, mini["grid_coords"], cfg, verbose=False)
-        clustering_out = _run_clustering_cmip6(smoothed, frechet, cfg, verbose=False)
+    raw = _run_local_estimation_cmip6(frechet, mini["grid_coords"], cfg, verbose=False)
+    smoothed = _smooth_estimates_cmip6(raw, mini["grid_coords"], cfg, verbose=False)
+    clustering_out = _run_clustering_cmip6(smoothed, frechet, cfg, verbose=False)
 
     return dict(
         mini=mini,
@@ -347,22 +341,14 @@ class TestEDCAgainstRValidated:
 #  2. MLE: optimize_local_mle must match R-validated pairwise_density_optim_local
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.parametrize("backend", _BACKENDS)
 class TestMLEAgainstRValidated:
-    """Compare optimize_local_mle (CMIP6 pipeline) to
-    pairwise_density_optim_local (R-validated) on the R simulation data.
+    """The CMIP6 entry point optimize_local_mle must agree with the grid
+    entry point pairwise_density_optim_local on the same pair arrays.
 
-    pairwise_density_optim_local has:
-      - parscale = (ub - lb) / 100
-      - boundary retry (up to 5 extra starts)
-      - b lower bound = 0.01
-
-    optimize_local_mle lacks all three.
-
-    We build the same pair arrays for both functions from the R reference
-    simulation data, then compare their (a, b, γ) estimates.
-
-    Parametrized over backend={python, rust} to verify both gradient paths.
+    Both run the same SciPy multistart, so with the same start budget they
+    must return identical estimates.  This checks that the CMIP6 path builds
+    the same neighbour pairs and bounds as the grid path.  Measured on the
+    five selected points: max |difference| = 0.0.
     """
 
     def setup_method(self):
@@ -376,67 +362,37 @@ class TestMLEAgainstRValidated:
             scalars.loc[scalars["parameter"] == "locest_abst", "value"].iloc[0]
         )
 
-    def test_optimize_local_mle_matches_validated_python(self, backend):
-        """optimize_local_mle must produce estimates close to
-        pairwise_density_optim_local at the R-reference selected points.
-
-        pairwise_density_optim_local is already R-validated (it has parscale,
-        boundary retry, b ≥ 0.01).  optimize_local_mle is the CMIP6 pipeline
-        version that lacks these features.
-
-        We call both with the same pair arrays and compare.  Any disagreement
-        proves the algorithmic diffs matter.
-        """
+    def test_optimize_local_mle_matches_grid_entry_point(self):
         from weatherisk.backend import optimize_local_mle
+        from weatherisk.cmip6_pipeline import CMIP6Config
         from weatherisk.density import pairwise_density_optim_local
 
-        mismatches = []
+        ensemble = CMIP6Config().mle_ensemble
+        n_checked = 0
         for _, row in self.ref_pts.iterrows():
             x, y = row["X"], row["Y"]
             xy_pos = self.grid.koord_num(x, y)
-
             zi, zj, xl, yl = _build_pair_arrays(
                 self.sim_3d, self.grid, xy_pos, self.abstand,
             )
-            if zi is None:
-                continue
+            assert zi is not None, f"no neighbours for grid point {int(row['grid_point'])}"
 
-            # R-validated version (correct — has parscale, retry, b ≥ 0.01)
-            est_validated = pairwise_density_optim_local(
+            est_grid = pairwise_density_optim_local(
                 self.sim_3d, 5.0, 1.0, x, y, self.grid,
-                abstand=self.abstand, ensemble=5,
+                abstand=self.abstand, ensemble=ensemble,
                 lower_bounds=(0.01, 0.01),
                 upper_bounds=(15.0, 15.0),
             )
-
-            # CMIP6 pipeline version (under test) — with specified backend
-            with _force_backend(backend):
-                est_backend = optimize_local_mle(
-                    zi, zj, xl, yl, 5.0, 1.0, ensemble=5, seed=42,
-                    max_boundary_retries=5,
-                )
-
-            if not np.allclose(est_backend, est_validated, atol=0.5):
-                mismatches.append({
-                    "point": int(row["grid_point"]),
-                    "x": x, "y": y,
-                    "validated": est_validated.tolist(),
-                    "backend": est_backend.tolist(),
-                })
-
-        assert len(mismatches) == 0, (
-            f"optimize_local_mle [{backend}] differs from "
-            f"pairwise_density_optim_local "
-            f"at {len(mismatches)}/{len(self.ref_pts)} selected points:\n"
-            + "\n".join(
-                f"  Point {m['point']} ({m['x']:.2f},{m['y']:.2f}): "
-                f"validated=({m['validated'][0]:.3f}, {m['validated'][1]:.3f}, "
-                f"{m['validated'][2]:.3f}) vs "
-                f"backend=({m['backend'][0]:.3f}, {m['backend'][1]:.3f}, "
-                f"{m['backend'][2]:.3f})"
-                for m in mismatches
+            est_cmip6 = optimize_local_mle(
+                zi, zj, xl, yl, 5.0, 1.0, ensemble=ensemble, seed=42,
+                max_boundary_retries=5,
             )
-        )
+            np.testing.assert_array_equal(
+                est_cmip6, est_grid,
+                err_msg=f"grid point {int(row['grid_point'])} ({x:.2f}, {y:.2f})",
+            )
+            n_checked += 1
+        assert n_checked == len(self.ref_pts)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -444,25 +400,24 @@ class TestMLEAgainstRValidated:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestConfigDefaults:
-    """CMIP6Config.mle_ensemble and PipelineConfig.mle_ensemble must be 5.
+    """The CMIP6 and CPC pipelines must share one default start budget.
 
-    R code (parameters.R line 26):  locest_ensemble = 5
+    The R code uses locest_ensemble = 5, but parity with R is judged by
+    likelihood, so the default is not pinned to R's value here.  The
+    likelihood tests (test_local_mle_matches_r and
+    tests/parity/test_parity_pairwise_density_optim_local.py) check whether
+    the default budget is large enough.
     """
 
-    def test_cmip6_mle_ensemble(self):
+    def test_pipelines_share_default_mle_ensemble(self):
         from weatherisk.cmip6_pipeline import CMIP6Config
-        cfg = CMIP6Config()
-        assert cfg.mle_ensemble == 5, (
-            f"CMIP6Config.mle_ensemble={cfg.mle_ensemble}, "
-            f"R uses locest_ensemble=5; the default should preserve exact parity."
-        )
-
-    def test_cpc_mle_ensemble(self):
         from weatherisk.cpc_pipeline import PipelineConfig
-        cfg = PipelineConfig()
-        assert cfg.mle_ensemble == 5, (
-            f"PipelineConfig.mle_ensemble={cfg.mle_ensemble}, "
-            f"R uses locest_ensemble=5; the default should preserve exact parity."
+
+        cmip6 = CMIP6Config().mle_ensemble
+        cpc = PipelineConfig().mle_ensemble
+        assert isinstance(cmip6, int) and cmip6 >= 1
+        assert cmip6 == cpc, (
+            f"CMIP6Config.mle_ensemble={cmip6} != PipelineConfig.mle_ensemble={cpc}"
         )
 
 
@@ -720,8 +675,7 @@ class TestMiniCMIP6Pipeline:
             ),
         )
 
-    @pytest.mark.parametrize("backend", _BACKENDS)
-    def test_local_mle_matches_r(self, backend):
+    def test_local_mle_matches_r(self):
         """Local MLE NLL values must be as good as (or better than) R's.
 
         Exact parameter matching is impossible because:
@@ -730,10 +684,11 @@ class TestMiniCMIP6Pipeline:
           - NLL surface is flat for cells with a≈0 (b,g unidentifiable)
 
         Instead we verify that Python's optimum is never materially worse
-        than R's. The NLL function itself is validated to be identical
-        (neg_log_likelihood_sum = -sum(summands)).
+        than R's: NLL_py <= NLL_R + 0.03 at every cell.  Both NLLs are
+        evaluated by neg_log_likelihood_sum, which is validated against R in
+        tests/parity/test_parity_pairwise_density_summand.py.
 
-        Parametrized over backend={python, rust}.
+        The start budget is the package default (CMIP6Config().mle_ensemble).
         """
         from weatherisk.cmip6_pipeline import CMIP6Config, _local_mle_one_cmip6
         from weatherisk.backend import neg_log_likelihood_sum
@@ -760,11 +715,10 @@ class TestMiniCMIP6Pipeline:
         n_grid = len(grid_df)
         n_years = frechet.shape[0]
         py_est = np.zeros((n_grid, 3))
-        with _force_backend(backend):
-            for cidx in range(n_grid):
-                py_est[cidx] = _local_mle_one_cmip6(
-                    frechet, cidx, grid_coords, cfg,
-                )
+        for cidx in range(n_grid):
+            py_est[cidx] = _local_mle_one_cmip6(
+                frechet, cidx, grid_coords, cfg,
+            )
 
         r_est_arr = np.column_stack([
             r_est["a_est"].values, r_est["b_est"].values, r_est["g_est"].values,
@@ -802,187 +756,79 @@ class TestMiniCMIP6Pipeline:
                 max_nll_excess = max(max_nll_excess, excess)
 
         assert n_worse == 0, (
-            f"Local MLE [{backend}] found worse optima than R at "
+            f"Local MLE (ensemble={cfg.mle_ensemble}) found worse optima than R at "
             f"{n_worse}/{n_grid} cells. "
             f"Max NLL excess = {max_nll_excess:.4f}. "
             f"Python should find optima at least as good as R."
         )
 
-    @pytest.mark.parametrize("backend", _BACKENDS)
-    def test_local_mle_estimates_match_r_tightly(self, backend):
-        """Raw local MLE parameters should stay close to the R mini reference."""
-        result = _run_cmip6_mini_pipeline(backend)
+    def test_ellipse_dissimilarity_matches_r_up_to_r_indexing_bug(self):
+        """Ellipse dissimilarity on R's smoothed estimates matches R once
+        R's linear-indexing bug is replayed.
 
-        r_est = pd.read_csv(CMIP6_MINI_REF / "local_estimates_all.csv")
-        r_est_arr = np.column_stack([
-            r_est["a_est"].values,
-            r_est["b_est"].values,
-            r_est["g_est"].values,
-        ])
+        When both ellipses of a pair (i, j) are empty, R writes
+        ``dist_matrix[j] = 1``, which is element (j, 1) in R's 1-based
+        indexing, and leaves (i, j) at 0.  After ``100 * (D + t(D))`` this
+        sets entry (i, j) to 0 and adds 100 to entry (1, j).  Python writes
+        the correct value 100 at (i, j).  Replaying R's write pattern on
+        Python's matrix must reproduce R's matrix entry by entry, so the
+        bug accounts for every difference.
 
-        abs_diff = np.abs(result["raw"] - r_est_arr)
-        max_diff = abs_diff.max(axis=0)
-        mean_diff = abs_diff.mean(axis=0)
-
-        assert max_diff[0] < 0.05 and mean_diff[0] < 0.02, (
-            f"Local MLE a [{backend}] drifted from R: max={max_diff[0]:.6f}, mean={mean_diff[0]:.6f}."
-        )
-        assert max_diff[1] < 0.50 and mean_diff[1] < 0.20, (
-            f"Local MLE b [{backend}] drifted from R: max={max_diff[1]:.6f}, mean={mean_diff[1]:.6f}."
-        )
-        assert max_diff[2] < 0.50 and mean_diff[2] < 0.20, (
-            f"Local MLE gamma [{backend}] drifted from R: max={max_diff[2]:.6f}, mean={mean_diff[2]:.6f}."
-        )
-
-    @pytest.mark.parametrize("backend", _BACKENDS)
-    def test_smoothed_local_estimates_match_r_tightly(self, backend):
-        """Smoothed local estimates should stay close to the R mini reference."""
-        result = _run_cmip6_mini_pipeline(backend)
-
-        r_smoothed = pd.read_csv(CMIP6_MINI_REF / "local_estimates_smoothed.csv")
-        r_smoothed_arr = np.column_stack([
-            r_smoothed["a_sm"].values,
-            r_smoothed["b_sm"].values,
-            r_smoothed["g_sm"].values,
-        ])
-
-        abs_diff = np.abs(result["smoothed"] - r_smoothed_arr)
-        max_diff = abs_diff.max(axis=0)
-        mean_diff = abs_diff.mean(axis=0)
-
-        assert max_diff[0] < 0.05 and mean_diff[0] < 0.02, (
-            f"Smoothed a [{backend}] drifted from R: max={max_diff[0]:.6f}, mean={mean_diff[0]:.6f}."
-        )
-        assert max_diff[1] < 0.50 and mean_diff[1] < 0.20, (
-            f"Smoothed b [{backend}] drifted from R: max={max_diff[1]:.6f}, mean={mean_diff[1]:.6f}."
-        )
-        assert max_diff[2] < 0.50 and mean_diff[2] < 0.20, (
-            f"Smoothed gamma [{backend}] drifted from R: max={max_diff[2]:.6f}, mean={mean_diff[2]:.6f}."
-        )
-
-    @pytest.mark.parametrize("backend", _BACKENDS)
-    def test_ellipse_dissimilarity_matches_r(self, backend):
-        """Ellipse dissimilarity must match R for non-degenerate pairs.
-
-        Uses R's smoothed estimates directly (not Python's MLE) to
-        isolate the dissimilarity function from upstream MLE differences.
-
-        R has a bug in calc_distance_ellipses: when both ellipses are
-        empty, ``dist_matrix[j]=1`` uses linear indexing instead of
-        ``dist_matrix[i,j]=1``, writing to the wrong matrix position
-        and overwriting correct values.  We compare against a corrected
-        version of the R reference that fixes these entries.
-
-        Parametrized over backend={python, rust}.
+        Tolerance: the mini fixture was written with 15 significant digits,
+        so entries agree to rtol = 5e-15 (measured max diff 3.1e-13 on an
+        entry of 166.67).
         """
         from weatherisk.clustering import calc_distance_ellipses
 
-        r_smoothed = pd.read_csv(
+        smoothed = pd.read_csv(
             CMIP6_MINI_REF / "local_estimates_smoothed.csv"
-        )
-        r_ell = pd.read_csv(
-            CMIP6_MINI_REF / "ellipse_dissimilarity_matrix.csv"
-        ).values
+        )[["a_sm", "b_sm", "g_sm"]].values
+        r_ell = pd.read_csv(CMIP6_MINI_REF / "ellipse_dissimilarity_matrix.csv").values
 
-        smoothed = np.column_stack([
-            r_smoothed["a_sm"].values,
-            r_smoothed["b_sm"].values,
-            r_smoothed["g_sm"].values,
-        ])
+        py_ell = calc_distance_ellipses(smoothed, res=21)
 
-        with _force_backend(backend):
-            py_ell = calc_distance_ellipses(smoothed, res=21)
+        upper = np.triu(py_ell, 1)
+        both_empty = upper == 100.0  # 1 - IoU < 1 whenever an ellipse is non-empty
+        replay = np.where(both_empty, 0.0, upper)
+        replay[np.nonzero(both_empty.any(axis=0))[0], 0] = 100.0
+        replay = replay + replay.T
 
-        # Build the corrected R reference by re-simulating the algorithm
-        # without the linear-indexing bug.
-        from weatherisk.covariance import cov_fkt_2d
-        res = 21
-        xs = np.repeat(np.linspace(-1, 1, res), res)
-        ys = np.tile(np.linspace(-1, 1, res), res)
-        hmask = ((xs ** 2 + ys ** 2) <= res ** 2) & ((ys > 0) | (xs > 0))
-        xs_m, ys_m = xs[hmask], ys[hmask]
-
-        n = len(smoothed)
-        dist_correct = np.zeros((n, n))
-        for i in range(n - 1):
-            for j in range(i + 1, n):
-                mx = max(
-                    smoothed[i, 0] + smoothed[i, 1],
-                    smoothed[j, 0] + smoothed[j, 1],
-                )
-                e1 = (cov_fkt_2d(
-                    xs_m, ys_m, 1.0,
-                    smoothed[i, 0] / mx, smoothed[i, 1] / mx, smoothed[i, 2],
-                ) > np.exp(-1)).astype(float)
-                e2 = (cov_fkt_2d(
-                    xs_m, ys_m, 1.0,
-                    smoothed[j, 0] / mx, smoothed[j, 1] / mx, smoothed[j, 2],
-                ) > np.exp(-1)).astype(float)
-                if max(e1.sum(), e2.sum()) == 0:
-                    dist_correct[i, j] = 1.0
-                else:
-                    inter = (e1 * e2).sum() + 0.5
-                    union = (e1 + e2 - e1 * e2).sum() + 0.5
-                    dist_correct[i, j] = 1.0 - inter / union
-        r_ell_corrected = 100.0 * (dist_correct + dist_correct.T)
-
-        max_diff = np.abs(py_ell - r_ell_corrected).max()
+        assert both_empty.sum() > 0, "fixture no longer exercises R's indexing bug"
         np.testing.assert_allclose(
-            py_ell, r_ell_corrected, atol=0.01,
-            err_msg=(
-                f"Ellipse dissimilarity [{backend}] differs from corrected "
-                f"R reference. Max diff={max_diff:.4f}. "
-                f"(R reference has linear-indexing bug on empty ellipses; "
-                f"comparison uses corrected version.)"
-            ),
+            replay, r_ell, rtol=5e-15, atol=1e-14,
+            err_msg="R's ellipse matrix is not explained by its indexing bug",
         )
 
-    @pytest.mark.parametrize("backend", _BACKENDS)
-    def test_lec_k_matches_r(self, backend):
-        """LEC cluster count k from pipeline must match R's k_LEC.
+    def test_lec_on_r_smoothed_estimates_matches_r_q30_and_k(self):
+        """The pipeline's LEC step on R's smoothed estimates gives R's q30 and k.
 
-        Uses R's smoothed estimates directly (not Python's MLE) to
-        isolate the clustering step from upstream MLE differences.
-        The R-buggy ellipse dissimilarity pairs are corrected to 100
-        (maximum dissimilarity) for the comparison.
-
-        Parametrized over backend={python, rust}.
+        This isolates LEC clustering from the optimizer.  The partition is
+        not compared: R's indexing bug changes 44 matrix entries by 100, and
+        the partitions at k differ on 57 cell pairs for that reason.  SciPy
+        run on R's own buggy matrix reproduces R's partition exactly
+        (measured).
         """
-        from weatherisk.clustering import (
-            calc_distance_ellipses, clustering, cluster_number_threshold_method,
-        )
+        from weatherisk.cmip6_pipeline import CMIP6Config, _run_clustering_cmip6
 
-        r_smoothed = pd.read_csv(
+        smoothed = pd.read_csv(
             CMIP6_MINI_REF / "local_estimates_smoothed.csv"
-        )
-        r_lec_params = pd.read_csv(CMIP6_MINI_REF / "lec_clustering_params.csv")
-        k_r = int(r_lec_params["k_lec"].iloc[0])
+        )[["a_sm", "b_sm", "g_sm"]].values
+        frechet = pd.read_csv(CMIP6_MINI_REF / "frechet.csv").values
+        r_lec = pd.read_csv(CMIP6_MINI_REF / "lec_clustering_params.csv")
+        k_r = int(r_lec["k_lec"].iloc[0])
+        q30_r = float(r_lec["q30_lec"].iloc[0])
 
-        smoothed = np.column_stack([
-            r_smoothed["a_sm"].values,
-            r_smoothed["b_sm"].values,
-            r_smoothed["g_sm"].values,
-        ])
+        cfg = CMIP6Config(quantile_threshold=0.30, retain_clustering_artifacts=True)
+        out = _run_clustering_cmip6(smoothed, frechet, cfg, verbose=False)
+        dm_lec = out["dm_lec"]
+        q30_py = float(np.quantile(dm_lec[np.triu_indices_from(dm_lec, k=1)], 0.30))
 
-        with _force_backend(backend):
-            py_ell = calc_distance_ellipses(smoothed, res=21)
+        assert abs(q30_py - q30_r) < 1e-14, f"LEC q30 {q30_py!r} != R {q30_r!r}"
+        assert int(out["k_lec"]) == k_r, f"LEC k {out['k_lec']} != R {k_r}"
 
-        ell_cond = py_ell[np.triu_indices_from(py_ell, k=1)]
-        q30 = float(np.quantile(ell_cond, 0.30))
-        hc = clustering(ell_cond)
-        k_pipe = max(2, cluster_number_threshold_method(hc, q30))
-
-        assert k_pipe == k_r, (
-            f"Pipeline LEC [{backend}] k={k_pipe} (q30={q30:.2f}) ≠ "
-            f"R k_LEC={k_r}. "
-            f"Both use R's smoothed estimates. Check ellipse dissimilarity "
-            f"or clustering differences."
-        )
-
-    @pytest.mark.parametrize("backend", _BACKENDS)
-    def test_full_mini_pipeline_edc_matches_r_exactly(self, backend):
+    def test_full_mini_pipeline_edc_matches_r_exactly(self):
         """Full mini CMIP6 EDC chain should reproduce R's q30 and k."""
-        result = _run_cmip6_mini_pipeline(backend)
+        result = _run_cmip6_mini_pipeline()
         r_edc_params = pd.read_csv(CMIP6_MINI_REF / "edc_clustering_params.csv")
         k_r = int(r_edc_params["k_edc"].iloc[0])
         q30_r = float(r_edc_params["q30"].iloc[0])
@@ -992,69 +838,6 @@ class TestMiniCMIP6Pipeline:
         k_py = int(result["clustering"]["k_edc"])
 
         assert q30_py == pytest.approx(q30_r, abs=1e-12), (
-            f"Full mini EDC [{backend}] q30={q30_py:.12f} ≠ R q30={q30_r:.12f}."
+            f"Full mini EDC q30={q30_py:.12f} ≠ R q30={q30_r:.12f}."
         )
-        assert k_py == k_r, (
-            f"Full mini EDC [{backend}] k={k_py} ≠ R k_EDC={k_r}."
-        )
-
-    @pytest.mark.parametrize("backend", _BACKENDS)
-    def test_full_mini_pipeline_lec_matches_r_exactly(self, backend):
-        """Full mini CMIP6 LEC chain should reproduce R's q30 and k."""
-        result = _run_cmip6_mini_pipeline(backend)
-        r_lec_params = pd.read_csv(CMIP6_MINI_REF / "lec_clustering_params.csv")
-        k_r = int(r_lec_params["k_lec"].iloc[0])
-        q30_r = float(r_lec_params["q30_lec"].iloc[0])
-
-        dm_lec = result["clustering"]["dm_lec"]
-        q30_py = float(np.quantile(dm_lec[np.triu_indices_from(dm_lec, k=1)], 0.30))
-        k_py = int(result["clustering"]["k_lec"])
-
-        assert q30_py == pytest.approx(q30_r, abs=1e-12), (
-            f"Full mini LEC [{backend}] q30={q30_py:.12f} ≠ R q30={q30_r:.12f}."
-        )
-        assert k_py == k_r, (
-            f"Full mini LEC [{backend}] k={k_py} ≠ R k_LEC={k_r}."
-        )
-
-    def test_full_mini_pipeline_backends_agree_on_edc_exactly(self):
-        """Python and Rust backends should produce identical mini EDC outputs."""
-        py = _run_cmip6_mini_pipeline("python")
-        rust = _run_cmip6_mini_pipeline("rust")
-
-        np.testing.assert_allclose(
-            py["clustering"]["dm_edc"],
-            rust["clustering"]["dm_edc"],
-            atol=1e-12,
-            err_msg="Python and Rust EDC matrices differ on the mini CMIP6 chain.",
-        )
-        assert py["clustering"]["k_edc"] == rust["clustering"]["k_edc"], (
-            f"Python and Rust EDC k differ: {py['clustering']['k_edc']} vs {rust['clustering']['k_edc']}."
-        )
-
-    def test_full_mini_pipeline_backends_agree_on_lec_exactly(self):
-        """Python and Rust backends should produce identical mini LEC outputs."""
-        py = _run_cmip6_mini_pipeline("python")
-        rust = _run_cmip6_mini_pipeline("rust")
-
-        np.testing.assert_allclose(
-            py["raw"],
-            rust["raw"],
-            atol=1e-10,
-            err_msg="Python and Rust raw local estimates differ on the mini CMIP6 chain.",
-        )
-        np.testing.assert_allclose(
-            py["smoothed"],
-            rust["smoothed"],
-            atol=1e-10,
-            err_msg="Python and Rust smoothed local estimates differ on the mini CMIP6 chain.",
-        )
-        np.testing.assert_allclose(
-            py["clustering"]["dm_lec"],
-            rust["clustering"]["dm_lec"],
-            atol=1e-10,
-            err_msg="Python and Rust LEC matrices differ on the mini CMIP6 chain.",
-        )
-        assert py["clustering"]["k_lec"] == rust["clustering"]["k_lec"], (
-            f"Python and Rust LEC k differ: {py['clustering']['k_lec']} vs {rust['clustering']['k_lec']}."
-        )
+        assert k_py == k_r, f"Full mini EDC k={k_py} ≠ R k_EDC={k_r}."

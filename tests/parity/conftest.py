@@ -1,16 +1,25 @@
-"""Shared fixtures and helpers for strict R-parity tests.
+"""Shared fixtures and helpers for the Python-vs-R parity tests.
 
-All tests in this directory verify strict Python-vs-R parity as defined
-in docs/python_r_parity_migration_plan.md. The acceptance standard is:
+Every test in this directory compares weatherisk against frozen outputs of
+Thorsten Dickhaus's R code (r_code/), generated once by
+tests/generate_r_reference.R.  No test calls R; all of them pass with
+``Rscript`` absent from PATH.
 
-    max |Python_output - R_output| < 1e-14
+Acceptance criteria (docs/remove_r_runtime_plan.md, U4):
 
-for deterministic functions, and exact selected-output matching for
-optimizer functions.
+* Deterministic functions match R strictly, ``max |Python - R| < 1e-14``
+  (``STRICT_ATOL``).  Where a fixture was written by R with fewer than 17
+  significant digits, the test states the CSV precision it allows.
+* Optimizer outputs are judged by likelihood, not by parameters.  At every
+  cell the Python optimum must satisfy ``NLL_py <= NLL_R + 0.03``
+  (``NLL_TOL``), where both negative pairwise log-likelihoods are evaluated
+  by the same deterministic function on the same data.  The pairwise
+  likelihood is flat in (b, g) when a is at its lower bound, so equal
+  likelihood does not imply equal parameters (Appendix B of the plan).
+* Hierarchical clustering may differ from R's ``hclust`` only through the
+  order in which tied average-linkage distances are merged.
 
-Each test file covers exactly one R function and documents when it was
-added, what decisions were made, and whether the function currently meets
-the strict acceptance standard.
+Each test file covers one R function and documents the criterion it asserts.
 """
 
 from __future__ import annotations
@@ -23,8 +32,11 @@ import pytest
 
 REF = Path(__file__).resolve().parent.parent / "reference_data"
 
-# The strict tolerance used across all parity tests.
+# Strict tolerance for deterministic functions.
 STRICT_ATOL = 1e-14
+
+# Likelihood tolerance for optimizer outputs: NLL_py <= NLL_R + NLL_TOL.
+NLL_TOL = 0.03
 
 
 def skip_if_no_ref():
@@ -33,6 +45,17 @@ def skip_if_no_ref():
         pytest.skip(
             "R reference data not generated — run: Rscript tests/generate_r_reference.R"
         )
+
+
+def package_default_ensemble() -> int:
+    """Return the package's default multistart budget for the local MLE.
+
+    Likelihood tests use this value rather than R's ``locest_ensemble`` so
+    that they check the start budget a user actually gets.
+    """
+    from weatherisk.cmip6_pipeline import CMIP6Config
+
+    return int(CMIP6Config().mle_ensemble)
 
 
 def r_to_py_index_map(grid):
