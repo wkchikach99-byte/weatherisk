@@ -127,7 +127,17 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
    This is consistent with the published EDC result having been computed without the STL step, or with maxima taken from the raw series. It does not prove it.
    Only J. Contzen's script for Sect. 5 can settle it.
    A further check is the LEC count on the non-detrended input (the paper reports 24).
-   Both full Fig. 9 runs were submitted on 2026-11-07 from commit 7561a6e, 50 local-MLE starts, 16 CPUs, qos 48h: job 48932143 with STL, job 48932144 with `--no-detrend`. Measured on the step-2 checkpoint (job 48932524), step 3 with 50 starts costs 110 s per cell (101 to 116 s over 6 cells), about 35 h on 16 workers, and step 3 writes its checkpoint only at the end. Both jobs were cancelled before step 3 could finish and resubmitted from the step-2 checkpoint with 64 CPUs and 240 GB: job 48932578 with STL, job 48932579 with `--no-detrend`. Expected step 3 at 64 workers is about 9 h (guess, linear scaling). Results pending.
+   Both full Fig. 9 runs were submitted on 2026-11-07 from commit 7561a6e, 50 local-MLE starts, 16 CPUs, qos 48h: job 48932143 with STL, job 48932144 with `--no-detrend`. Measured on the step-2 checkpoint (job 48932524), step 3 with 50 starts costs 110 s per cell (101 to 116 s over 6 cells), about 35 h on 16 workers, and step 3 writes its checkpoint only at the end. Both jobs were cancelled before step 3 could finish and resubmitted from the step-2 checkpoint with 64 CPUs and 240 GB: job 48932578 with STL, job 48932579 with `--no-detrend`. Step 3 took about 11.9 h on 64 workers (step-3 checkpoints written 2026-11-08 01:36 and 01:39 CET), longer than the 9 h guess from linear scaling.
+   Step-5 results (measured, logs `fig9_pyonly_48932578.out` and `_48932579.out`):
+
+   | Run | k_LEC | k_EDC |
+|---|---|---|
+   | STL detrending (48932578) | 14 | 142 |
+   | No detrending (48932579) | 23 | 104 |
+   | Published (Contzen et al. 2025) | 24 | 104 |
+
+   Without detrending both counts are at or next to the published ones. With STL, k_LEC is 14, far from 24. k_LEC depends on the optimizer through the local estimates, so 23 versus 24 is within what we would expect from a different optimizer (inference, not tested). The March 2026 STL run with the old R backend gave k_LEC 21 and k_EDC 142. Step 6 (in-cluster re-estimation) is still running; LEC re-estimation finished at 05:23 and 05:25 CET.
+   Both jobs loaded the code from before the switch to min ranks (item E6). `hpc/r_reference/edc_labels_rule_check.py` recomputed the EDC labels from each run's step-2 checkpoint under both rules. Average ranks reproduce the step-5 checkpoint labels exactly, and min ranks give identical labels in both runs (0 cells differ). So the runs need no restart.
 
 5. **What the SoftwareX paper should say.** v23.tex line ~743 currently says "we attribute this primarily to differences in preprocessing". This has not been tested. Proposed replacement, not yet in the paper:
    "Contzen et al. do not state their STL settings. With the STL settings used here, the deterministic EDC chain gives k_EDC between 137 and 147 across the variants we tried. Without detrending it gives 104 to 106, depending only on how ties in the dendrogram are broken."
