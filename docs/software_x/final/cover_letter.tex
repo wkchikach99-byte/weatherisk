@@ -37,32 +37,36 @@ output requires chaining together several technically demanding
 steps---trend removal, block-maxima extraction, GEV fitting,
 Fr\'{e}chet transformation, local max-stable parameter estimation,
 and finally clustering---and there was no single Python tool that
-handled all of them. The R implementation of Contzen, Dickhaus, and Lohmann
-(``Regionalization approaches for the spatial analysis of extremal
-dependence'', \textit{Extremes}, 2025,
-\url{https://doi.org/10.1007/s10687-025-00519-2}) provided the
-empirical illustration for that paper, but porting results back and forth between R
-and Python for a large HPC run is cumbersome. We wrote
+handled all of them. Contzen, Dickhaus and Lohmann (``Regionalization
+approaches for the spatial analysis of extremal dependence'',
+\textit{Extremes}, 2025,
+\url{https://doi.org/10.1007/s10687-025-00519-2}) introduced the two
+clustering methods we implement and applied them to CMIP6 precipitation,
+using R functions written for that study. Those functions cover the
+statistical core but not the preprocessing of model output, and they
+were not designed for parallel runs on a global grid. We wrote
 \texttt{weatherisk} to close that gap.
 
 \bigskip
-% TODO: v0.1.2 and its new Zenodo DOI at release
-The package (MIT licence, v0.1.1; archived at
+% RELEASE BLOCKER: set the version and the Zenodo DOI to those of the v0.2.0 release (they must match metadata C1 and C3 in the paper)
+The package (MIT licence, v0.2.0; archived at
 \url{https://doi.org/10.5281/zenodo.20108563}) exposes the full
 pipeline through both a command-line interface and a Python API. Two
-clustering approaches are supported---Local Estimates Clustering (LEC)
-and Extremal Dependence Clustering (EDC)---and the package runs
-without R. Each pipeline stage is tested against outputs that the
-original R code produced once and that ship with the repository.
-Deterministic functions match these outputs to near machine precision.
-The local optimiser is judged by the likelihood it reaches, because on
-short series the composite likelihood is too flat for a comparison of
-parameter values to be meaningful. As a concrete demonstration,
-we revisit a published precipitation clustering study for the
-AWI-ESM-1-1-LR model ($192\times96$ grid, 1850--2005), running the
-full pipeline in Python on a high-performance cluster and obtaining
-a spatially consistent cluster structure that is broadly comparable
-to the published result.
+clustering approaches are supported, Local Estimates Clustering (LEC)
+and Extremal Dependence Clustering (EDC), and neither installation nor
+use requires R. The test suite compares individual functions and each
+pipeline stage with outputs of R that were computed once and are stored
+in the repository. Deterministic functions agree with these outputs to
+within $10^{-10}$ or better. The local optimiser is judged by the
+likelihood it reaches, because on short series the pairwise likelihood
+is too flat for a comparison of parameter values to be meaningful. As
+a demonstration, we revisit the published precipitation clustering for
+the AWI-ESM-1-1-LR model ($192\times96$ grid, 1850--2005) and run the
+full pipeline on 64 cores of a computing cluster. Without detrending,
+EDC gives the published 104 clusters and LEC gives 23 against 24; with
+STL detrending the counts are 142 and 14. The manuscript reports both
+runs, because the published study names STL but not its
+settings and the cluster counts depend on them.
 
 \bigskip
 The manuscript follows the SoftwareX author guidelines.
@@ -73,6 +77,7 @@ appendix with the code for both examples. The source code is publicly available 
 archived on Zenodo.
 
 \bigskip
+% AUTHOR CHECK: the next sentences must be true on the day of submission (all authors have read the final version)
 W.~Kchikach built the software, ran all experiments, and wrote the
 paper. T.~Dickhaus and G.~Lohmann guided the scientific direction and
 reviewed the manuscript. All authors have read the final version and

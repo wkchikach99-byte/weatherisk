@@ -75,20 +75,22 @@
 We present \texttt{weatherisk}, an open-source Python package for
 identifying regions of homogeneous extremal dependence in gridded
 climate-model output. The package implements a
-complete analysis pipeline: \revt{seasonal-trend decomposition} removes
-long-term trends from raw monthly fields; annual block maxima are
+complete analysis pipeline: an optional \revt{seasonal-trend decomposition}
+removes long-term trends from raw monthly fields; annual block maxima are
 extracted and fitted with \revt{generalised extreme-value}
 distributions; marginals are transformed to unit Fr\'{e}chet
 scale---the standard heavy-tailed reference form required by max-stable
 models---and local spatial-dependence parameters are estimated before
 grid cells are partitioned into coherent regions. Two clustering
 schemes are supported, Local Estimates Clustering and Extremal
-Dependence Clustering. The test suite compares each pipeline stage
-with stored outputs of the original R implementation, so R is not
-needed to install, run or test the package. We demonstrate \texttt{weatherisk} on a global-precipitation
+Dependence Clustering. The test suite compares individual functions
+and each pipeline stage with stored outputs of R, so R is not needed
+to install, run or test the package. We demonstrate \texttt{weatherisk} on a global-precipitation
 case study using the \revt{Alfred Wegener Institute (AWI)}-ESM-1-1-LR model \revn{(T63 grid, $192\times96$
-cells, 1850--2005),} executed on the AWI \emph{albedo} high-performance cluster, \revn{revisiting a published clustering study
-and obtaining a spatially consistent result in Python. The outcome}
+cells, 1850--2005),} executed on the AWI \emph{albedo} high-performance cluster, \revn{revisiting a published clustering study.
+Without detrending, Extremal Dependence Clustering gives the published
+104~clusters and Local Estimates Clustering gives 23, against 24
+published; with STL detrending the counts are 142 and 14. The outcome}
 is a reproducible, scalable framework for
 spatial-extremes analysis, suited equally to synthetic benchmarks and
 publication-scale climate-model output.
@@ -115,13 +117,13 @@ for the current release of \texttt{weatherisk}.
 \hline
 \textbf{Nr.} & \textbf{Code metadata description} & \textbf{Metadata} \\
 \hline
-C1 & Current code version & \revn{v0.1.1} \\ % TODO: bump to v0.1.2 at release
+C1 & Current code version & v0.2.0 \\ % RELEASE BLOCKER: tag v0.2.0 and set __version__/pyproject to 0.2.0 before submission
 \hline
 C2 & Permanent link to code/repository &
   \url{https://github.com/wkchikach99-byte/weatherisk} \\
 \hline
 C3 & Permanent link to Reproducible Capsule &
-  \revn{\url{https://doi.org/10.5281/zenodo.20108563}} \\ % TODO: new Zenodo DOI for v0.1.2
+  \revn{\url{https://doi.org/10.5281/zenodo.20108563}} \\ % RELEASE BLOCKER: replace with the Zenodo DOI of the v0.2.0 release
 \hline
 C4 & Legal Code License & MIT \\
 \hline
@@ -133,9 +135,9 @@ C6 & Software code languages, tools, and services used &
 C7 & Compilation requirements, operating environments
   \& dependencies &
   Python~$\geq$3.10; NumPy; SciPy; pandas; matplotlib;
-  Click; xarray; netCDF4; scikit-learn; Cartopy; h5py;
-  statsmodels. Optional for development: pytest, pytest-cov, ruff,
-  mypy, pyreadr, psutil. R is not required. The validation fixtures
+  Click; xarray; netCDF4; scikit-learn; Cartopy; h5py.
+  Optional for development: pytest, pytest-cov, ruff, mypy, pyreadr,
+  psutil, statsmodels. R is not required. The validation fixtures
   were generated once with the reference R implementation and ship
   with the repository as frozen CSV and binary files. \\
 \hline
@@ -238,8 +240,9 @@ computing facilities.}
 \texttt{weatherisk} solves this problem by re-implementing the full
 pipeline in a single Python package that can be installed with
 \texttt{pip install}.  It is an independent implementation of the
-method of Contzen et al.~\cite{contzen2025}, tested stage by stage
-against stored outputs of the original R code on reduced inputs, and
+method of Contzen et al.~\cite{contzen2025}, tested function by
+function and stage by stage against stored outputs of R on reduced
+inputs, and
 it adds several practical features:
 \begin{itemize}
 \item \rev{a complete preprocessing chain for climate-model output:
@@ -252,8 +255,9 @@ it adds several practical features:
   strategies for heavy CMIP6\revo{ (Coupled Model Intercomparison
   Project Phase~6)}-style workloads on high-performance
   computing (HPC) infrastructure}; and
-\item \rev{a 196-test validation suite, including 30~end-to-end % TODO(U4): regenerate from test inventory
-  CMIP6 parity tests (Section~\ref{sec:validation})}.
+\item a suite of 238 automated tests that run without R, including
+  16 stage-by-stage comparisons with the R pipeline on a CMIP6
+  subset (Section~\ref{sec:validation}).
 \end{itemize}
 
 \rev{To demonstrate the software on a publication-level workload, we
@@ -282,7 +286,7 @@ spatial clustering of extremes in one package.
 \label{sec:architecture}
 
 \texttt{weatherisk} is a pip-installable Python package organised
-into 18~modules and a CLI entry point.  Figure~\ref{fig:workflow} % TODO: git ls-files lists 21 modules plus cli.py (excluding __init__.py); recount at the v0.1.2 tag
+into 22~modules and a CLI entry point.  Figure~\ref{fig:workflow}
 shows the overall workflow.
 
 \rev{The processing pipeline consists of seven stages. The first
@@ -294,17 +298,22 @@ subsequent statistical analysis:}
 \item \textbf{\rev{Preprocessing.}}
   \begin{enumerate}
   \item[\textbf{(a)}] \textbf{\rev{STL decomposition (detrending).}}
-    \rev{Raw monthly precipitation fields are decomposed using the
-    STL method of Cleveland et al.~\cite{cleveland1990}, using the
-    \texttt{statsmodels} implementation with a 12-month period,
-    robust fitting, a constant (degree-0) seasonal smoother and a
-    seasonal window at least as long as the series.
-    These settings correspond to the R call \texttt{stl(s.window =
-    "periodic", robust = TRUE)} in the reference workflow.  The trend component is
-    subtracted, retaining the seasonal cycle and residuals. \revt{This
-    step removes the long-term trend from the series,
-    leaving the seasonal cycle and interannual residuals available for
-    extreme-value analysis.}}
+    Raw monthly precipitation series are decomposed with the STL
+    method of Cleveland et al.~\cite{cleveland1990}. \texttt{weatherisk}
+    contains its own NumPy translation of the Fortran routine that
+    underlies R's \texttt{stl()}, with R's default smoothing
+    parameters; on the reference series it agrees with R to rounding
+    error (Section~\ref{sec:validation}). The decomposition uses a
+    12-month period, a periodic seasonal component and robust
+    fitting, which corresponds to the R call \texttt{stl(s.window =
+    "periodic", robust = TRUE)}. The trend component is subtracted,
+    so the seasonal cycle and the residuals remain for the
+    extreme-value analysis. Contzen et al.~\cite{contzen2025} do not
+    report their detrending settings; the settings above are those of
+    the R workflow that produced our reference data. The step can be
+    switched off (\texttt{detrend=False} in \texttt{CMIP6Config}, or
+    \texttt{--no-detrend} on the command line), in which case the
+    annual maxima are taken from the raw monthly series.
   \item[\textbf{(b)}] \textbf{\rev{Annual block-maxima extraction.}}
     \rev{From the detrended monthly series, the annual maximum
     precipitation value is extracted for each grid cell, \revt{keeping
@@ -356,8 +365,16 @@ subsequent statistical analysis:}
   three valid neighbours are required; cells with fewer than five
   valid pairs receive default estimates $(a,b,\gamma) = (1,0,0)$.
   The likelihood is maximised with the bounded quasi-Newton method
-  L-BFGS-B from SciPy, started from five Latin-hypercube points % TODO(U3): start budget set by the U3 sweep
+  L-BFGS-B from SciPy, started from 50 Latin-hypercube points
   (seed = 42) to reduce sensitivity to local optima~\cite{contzen2025}.
+  A run that ends within 0.01 of a parameter bound does not count
+  towards the 50 and is replaced, up to five times per cell.
+  We chose the number of starts empirically. With 50 starts, the
+  summed pairwise negative log-likelihood at the Python optimum was at
+  most 0.03 above its value at R's optimum at every cell of the
+  reference subset (Section~\ref{sec:validation}), for each of ten
+  random seeds that were not used to choose the number. With 40
+  starts, five of the ten seeds failed this criterion.
   In the CMIP6 pipeline, Fr\'{e}chet values are rounded to 11 decimal
   places before optimisation. The stored R reference inputs have a
   fixed decimal precision, and the rounding keeps last-bit differences
@@ -504,10 +521,9 @@ This subsection instead summarises the main software components and
 their roles within the package.
 
 \paragraph{Covariance modelling (\texttt{covariance})}
-This module implements the anisotropic covariance functions used by
-the max-stable dependence model, including stationary and
-non-stationary formulations and the conversion between covariance and
-extremal-coefficient representations.
+This module provides the covariance functions of the max-stable
+dependence model, which are anisotropic and either stationary or
+non-stationary. It also converts covariances into extremal coefficients and back.
 
 \paragraph{Simulation (\texttt{simulation})}
 The simulation module generates synthetic max-stable fields with
@@ -575,13 +591,55 @@ per-cell local MLE optimisation.
   \texttt{multiprocessing}; shared data is loaded once per worker.
 \end{enumerate}
 
-On a 6$\times$6 synthetic input, the Python pipeline % TODO(U6): pure-Python rerun (timing measured before v0.1.2)
-completed in 17.9\,s compared with 43.9\,s for the original
-R~implementation---a 2.5$\times$ speed-up on an identical workload.
-The full AWI-ESM-1-1-LR T63 grid (18{,}432 cells, 156~years) was
-run on the \revt{Alfred Wegener Institute (AWI)} \emph{albedo} HPC cluster using 16~parallel workers,
-completing in approximately 4~hours with peak memory below 2\,GiB; % TODO(U6): pure-Python rerun
-SLURM scripts and setup are provided under \texttt{hpc/}.
+Table~\ref{tab:timing} reports measured run times at two scales.
+The small benchmark runs the complete CMIP6 pipeline on a synthetic
+$6\times6$ grid with 12~years of monthly data
+(\texttt{scripts/run\_fig9\_benchmark.py}); it takes about 16\,s on a
+laptop, about 80\% of which is local estimation. The full
+AWI-ESM-1-1-LR T63 grid (18{,}432 cells, 156~years) was run on the
+\revt{Alfred Wegener Institute (AWI)} \emph{albedo} HPC cluster with
+64~worker processes, once with and once without STL detrending.
+Local estimation took 11.9\,h and 11.8\,h of these runs. Most of the
+remaining time is spent in the in-cluster re-estimation, which
+assigns one worker to each cluster. The largest LEC cluster
+(3{,}247 cells in the STL run, 6{,}230 cells in the run without
+detrending) was therefore processed by a single worker while most of
+the other cores were idle, and the CPU utilisation averaged over the
+whole job was 35\% and 47\% of the 64 allocated cores. Parallelising
+the re-estimation within a cluster is the most direct way to shorten
+full-scale runs. SLURM scripts and setup are provided under
+\texttt{hpc/}.
+
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+ & \textbf{Synthetic $6\times6$} & \textbf{AWI-ESM-1-1-LR T63} \\
+\midrule
+Grid cells & 36 & 18{,}432 \\
+Years & 12 & 156 \\
+Hardware & Apple M4 laptop & albedo compute node \\
+Worker processes & 4 & 64 \\
+Wall time, STL detrending & 16.3\,s & 36.0\,h \\
+Wall time, no detrending & --- & 26.0\,h \\
+Share of local estimation & 80\% & 33\% / 46\% \\
+Peak memory, all processes & 0.52\,GiB & 95\,GiB / 85\,GiB \\
+\bottomrule
+\end{tabular}
+\caption{Measured run times and memory of the CMIP6 pipeline.
+  Synthetic benchmark: median of three repetitions (15.9, 16.3 and
+  17.0\,s; local estimation 13.1\,s in the median run), commit
+  \texttt{d28e36f}, peak resident memory summed over the process
+  tree. T63 grid: one run per setting, given as STL / no detrending;
+  the wall times cover steps 3--6, which were resumed from a step-2
+  checkpoint (in the earlier job, STL detrending took 30\,s and the
+  GEV step 9\,s), and the memory is the SLURM maximum of the resident
+  memory summed over all processes, which counts shared pages more
+  than once. The largest single process peaked at 36\,GiB and
+  38\,GiB.}
+\label{tab:timing}
+\end{table}
 
 
 \paragraph{Command-line interface (\texttt{cli})}
@@ -625,7 +683,7 @@ print(result["k_edc"], result["k_lec"])
 steps one function at a time.
 
 Figure~\ref{fig:stripes} shows the result.  Panel~(a) displays the
-EDC clusters ($k_{\text{edc}} = 7$), panel~(b) the LEC clusters % TODO(U6): pure-Python rerun; k values and the description below
+EDC clusters ($k_{\text{edc}} = 7$), panel~(b) the LEC clusters % RELEASE BLOCKER: k values, figure and description date from a run before R was removed; replace with albedo job 48947462 (pure Python, seed 42)
 ($k_{\text{lec}} = 5$), and panel~(c) the true parameter field.
 The true semi-major axis~$b$ increases smoothly from left to right
 (panel~c), producing a continuous gradient from dark blue ($b
@@ -648,9 +706,9 @@ with the original R code.
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.95\textwidth]{figures/fig3_regenerated.png} % TODO(U6): replace with the pure-Python run
+\includegraphics[width=0.95\textwidth]{figures/fig3_regenerated.png} % RELEASE BLOCKER: see Example 1 text
 \caption{Synthetic validation on the ``stripes'' preset
-  ($k_{\text{edc}} = 7$, $k_{\text{lec}} = 5$). % TODO(U6): pure-Python rerun
+  ($k_{\text{edc}} = 7$, $k_{\text{lec}} = 5$). % RELEASE BLOCKER: see Example 1 text
   (a)~EDC clusters coloured by estimated semi-major axis~$b$;
   (b)~LEC clusters coloured by estimated~$b$;
   (c)~true parameter field showing a smooth left-to-right
@@ -664,8 +722,8 @@ with the original R code.
 \FloatBarrier
 
 \rev{\subsection{Example~2: \revb{Revisiting the Figure~9 case study} --- AWI-ESM-1-1-LR
-  global precipitation}}
-\label{sec:ex-fig9}
+  global precipitation}
+\label{sec:ex-fig9}}
 
 \rev{To demonstrate the software on the same data used in the original
 publication, we \revb{revisit the Figure~9 analysis} of Contzen et al.~\cite{contzen2025}.  The
@@ -699,84 +757,121 @@ Period & 1850--2005 (156~years) \\
 \label{tab:fig9-params}
 \end{table}
 
-\rev{The full seven-stage pipeline (Section~\ref{sec:architecture}) was
-executed on the AWI \emph{albedo} HPC cluster (16~CPU cores;
-SLURM scripts in \texttt{hpc/}). The command-line invocation is:}
+The seven-stage pipeline (Section~\ref{sec:architecture}) was run
+twice on the AWI \emph{albedo} HPC cluster with 64~CPU cores
+(\texttt{hpc/run\_fig9\_pyonly.slurm}): once with STL detrending and
+once without it. The command-line invocations are:
 
 \begin{lstlisting}[caption={\revb{Running the Figure~9 case study on HPC}.},
   label=lst:fig9, numbers=none]
 $ python scripts/reproduce_fig9.py \
     --data-dir /path/to/AWI-ESM-1-1-LR/pr/ \
-    --workers 16  --output-dir output/cmip6_fig9 \
-    --dpi 300
+    --workers 64  --output-dir output/fig9_detrend
+$ python scripts/reproduce_fig9.py \
+    --data-dir /path/to/AWI-ESM-1-1-LR/pr/ \
+    --workers 64  --output-dir output/fig9_nodetrend \
+    --no-detrend
 \end{lstlisting}
 
-\rev{Figure~\ref{fig:fig9} shows the result, and
-Table~\ref{tab:fig9-counts} compares the resulting cluster counts with
-those reported by Contzen et al.~\cite{contzen2025}:}
+Figure~\ref{fig:fig9} shows both results, and
+Table~\ref{tab:fig9-counts} compares the cluster counts with those
+reported by Contzen et al.~\cite{contzen2025}. In both runs all
+18{,}432 grid cells passed the screening of stage~1(c).
 
 \begin{table}[ht]
 \centering
 \begin{tabular}{lcc}
 \toprule
-\textbf{Method} & \textbf{Contzen et al.~\cite{contzen2025}} &
-  \textbf{\texttt{weatherisk}} \\
+\textbf{Run} & \textbf{EDC ($k_{\text{edc}}$)} &
+  \textbf{LEC ($k_{\text{lec}}$)} \\
 \midrule
-EDC ($k_{\text{edc}}$) & 104 & 142 \\ % TODO(U6): pure-Python rerun
-LEC ($k_{\text{lec}}$) & 24 & 21 \\ % TODO(U6): pure-Python rerun
+Contzen et al.~\cite{contzen2025} & 104 & 24 \\
+\texttt{weatherisk}, no detrending & 104 & 23 \\
+\texttt{weatherisk}, STL detrending & 142 & 14 \\
 \bottomrule
 \end{tabular}
-\caption{Cluster counts reported in Contzen et al.~\cite{contzen2025} and obtained
-  with \texttt{weatherisk} for the full Figure~9 \revb{case-study run}.}
+\caption{Cluster counts for the Figure~9 case study: as reported by
+  Contzen et al.~\cite{contzen2025}, and as obtained with
+  \texttt{weatherisk} with and without STL detrending (30\% quantile
+  threshold in all cases). Run times are given in
+  Table~\ref{tab:timing}.}
 \label{tab:fig9-counts}
 \end{table}
 
-\rev{The LEC result ($k_{\text{lec}} = 21$ vs.\ 24) is close; the % TODO(U6): pure-Python rerun; recheck this paragraph against the new k values
-remaining difference is consistent with the level of variation
-expected from differences in preprocessing conventions and from the
-flat optimisation landscape of the composite-likelihood surface at
-this scale. In particular, the Python workflow makes explicit choices
-about detrending, GEV fitting, partial-missing-value handling, and
-post-fit removal of non-finite cells that are not described in the
-same operational detail in Contzen et al.~\cite{contzen2025}. The EDC
-discrepancy is larger ($k_{\text{edc}} = 142$ vs.\ 104); we % TODO(U6): pure-Python rerun
-attribute this primarily to differences in preprocessing and
-missing-data handling---details that are not fully specified in the published paper
----rather than to any algorithmic deviation. On the mini reference
-inputs of Section~\ref{sec:validation}, the deterministic quantities
-match R to near machine precision, and LEC clustering run on R's own
-smoothed local estimates reproduces R's threshold and $k$ exactly. % TODO(U4): confirm against the final test inventory
-These tests check the implementation on identical inputs. They do
-not cover the preprocessing choices that the published workflow
-leaves implicit, which remain the more plausible source of the
-full-scale differences. A separate point concerns LEC only: we identified a
-logical indexing issue in the original R ellipse-dissimilarity code.
-More precisely, in the R function \texttt{calc\_distance\_ellipses}
-(\texttt{r\_code/functions.R}, line 515 in the repository version used
-here\revt{; see
-\url{https://github.com/wkchikach99-byte/weatherisk/blob/main/r\_code/functions.R}}), the empty-ellipse branch inside the nested loop over grid-cell
-indices \texttt{i} and \texttt{j} writes \texttt{dist\_matrix[j] = 1}
-rather than \texttt{dist\_matrix[i,j] <- 1}. Because \texttt{dist\_matrix[j]}
-uses linear indexing in R, the routine still executes and returns an
-output map, but some LEC dissimilarity values can be placed in
-incorrect matrix positions. This issue may contribute to the small
-remaining LEC difference, but it does not explain the larger EDC
-difference, which is more naturally linked to preprocessing and
-valid-cell-mask differences.}
+The two runs differ only in the detrending step. Without
+detrending, \texttt{weatherisk} gives the published
+$k_{\text{edc}} = 104$, and $k_{\text{lec}} = 23$ against the
+published 24. With STL detrending it gives $k_{\text{edc}} = 142$
+and $k_{\text{lec}} = 14$. Contzen et al.~\cite{contzen2025} state
+that the data were detrended with STL, but they do not report the
+STL settings, and their R implementation, which we use as the
+reference in Section~\ref{sec:validation}, does not contain the
+preprocessing of the climate application. We therefore cannot tell which
+preprocessing produced the published counts, and we report both
+runs.
+
+The EDC count is the easier one to interpret, because the EDC chain
+contains no numerical optimisation: the madogram depends only on the
+ranks of the annual maxima, and the threshold rule and the
+dendrogram are deterministic. We recomputed $k_{\text{edc}}$ on the
+full grid for six STL variants (periodic, 7-month or 13-month
+seasonal window; robust or non-robust fitting; trend removed, or
+trend and seasonal component removed; period extended to 2014). All
+gave $k_{\text{edc}}$ between 137 and 147. The annual maxima of the
+series without detrending gave 104, or 106 when the dendrogram is
+built in the merge order of R's \texttt{hclust}. Differences of this
+size come from the order in which equal dissimilarities are merged.
+For the STL input, the R functions of Contzen et al.\ applied to the
+same annual maxima give 140 instead of 142, and permuting the order
+of tied entries gives values from 139 to 142. The count is also
+sensitive to the quantile level: with STL detrending, a level of
+about 0.34 instead of 0.30 would be needed to obtain 104 clusters.
+
+The LEC count depends, in addition, on the local estimates
+$(a_i, b_i, \gamma_i)$ and hence on the optimiser. On the reference
+subset the Python optimiser attains R's likelihood, to within
+$10^{-6}$, at every cell, and a higher one at 12 of the 25 cells
+(Section~\ref{sec:validation}). Where the
+likelihood surface is flat, optima of equal likelihood can have
+different parameters. An exact match of $k_{\text{lec}}$ with a
+different optimiser is therefore not expected, and we do not
+interpret the difference between 23 and 24.
+
+Both runs used commit \texttt{7561a6e}. The only later change to the
+package concerns the ranking of tied annual maxima in the madogram,
+which now follows the R code; recomputing the EDC labels of both runs
+from their stored GEV output with the current rule gives identical
+labels.
+
+During validation we also found an indexing error in the LEC code of
+the original R implementation. In the function
+\texttt{calc\_distance\_ellipses} (\texttt{r\_code/functions.R},
+line 515 in the repository version used here\revt{; see
+\url{https://github.com/wkchikach99-byte/weatherisk/blob/main/r\_code/functions.R}}),
+the branch for an empty ellipse inside the loop over the grid-cell
+indices \texttt{i} and \texttt{j} assigns \texttt{dist\_matrix[j] = 1}
+instead of \texttt{dist\_matrix[i,j] <- 1}. Because R accepts a
+single index into a matrix as a linear index, the function runs
+without error, but the value is written to the wrong entry of the
+dissimilarity matrix. \texttt{weatherisk} implements the intended
+assignment; the corresponding validation test replays the R
+behaviour so that the two codes can still be compared on identical
+inputs.
 
 \FloatBarrier
 \begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.95\textwidth]{figures/fig9_combined_42260990.png} % TODO(U6): replace with the pure-Python run
-\caption{\rev{\revb{Python-based revisit of Figure~9} from Contzen et al.~\cite{contzen2025} using
-  \texttt{weatherisk}. Left: EDC clusters ($k_{\text{edc}} = 142$). % TODO(U6): pure-Python rerun
-  Right: LEC clusters ($k_{\text{lec}} = 21$). The experiment uses % TODO(U6): pure-Python rerun
-  AWI-ESM-1-1-LR historical precipitation on the T63 grid
-  (1850--2005) with $\nu = 5$, $\alpha = 1$, $\varepsilon = 5$,
-  and 30\% quantile threshold. The LEC panel shows spatially
-  coherent regions consistent with the published Figure~9; the
-  EDC panel captures the expected global heterogeneity of
-  extremal dependence.}}
+\includegraphics[width=\textwidth]{figures/fig9_pyonly_comparison.png}
+\caption{Python-based revisit of Figure~9 from Contzen
+  et al.~\cite{contzen2025} with \texttt{weatherisk}: EDC clusters
+  (left) and LEC clusters (right) of annual maxima of monthly
+  AWI-ESM-1-1-LR historical precipitation (T63 grid, 1850--2005;
+  $\nu = 5$, $\alpha = 1$, $\varepsilon = 5$, 30\% quantile
+  threshold), computed without detrending (top row) and with STL
+  detrending (bottom row). Colours only distinguish clusters within a
+  panel and are reused when a panel has more clusters than colours.
+  Contzen et al.\ report $k_{\text{edc}} = 104$ and
+  $k_{\text{lec}} = 24$.}
 \label{fig:fig9}
 \end{figure}
 
@@ -789,114 +884,166 @@ valid-cell-mask differences.}
 %% ============================================================
 
 
-\rev{\texttt{weatherisk} is an independent implementation of the
-method of Contzen et al.~\cite{contzen2025}. The tests compare it
-with outputs that the original R implementation produced once and
-that ship with the repository as frozen files, so running the tests
-does not require R. Each stage is held to a criterion that an
-independent implementation can meet, at three levels
-(Table~\ref{tab:validation}).
-\textbf{Level~1 (40 tests):} functions without random or iterative % TODO(U4): regenerate from test inventory
-components are compared with R on identical inputs and must match to
-near machine precision. These include the pairwise likelihood
-summands, the covariance function, the madogram, the ellipse-overlap
-distance and the LEC merge heights. All pass with relative errors
-$\leq 10^{-10}$, after resolving cross-language differences in % TODO(U4): regenerate from test inventory
-matrix storage order (Fortran vs.\ C), angular periodicity of
-rotation angles, and likelihood normalisation conventions.
-\textbf{Level~2 (30 tests):} a mini AWI-ESM-1-1-LR subset % TODO(U4): regenerate from test inventory
-($5{\times}5$ grid, 20~years) is run through the Python pipeline, and
-each stage is compared with the stored output of the R pipeline on
-the same subset (Table~\ref{tab:pipeline-parity}).
-The local optimiser is judged by likelihood. At every cell, both
-parameter vectors are evaluated with the same likelihood function, and
-the pairwise negative log-likelihood, summed over all neighbour pairs
-of the cell, may exceed its value at R's optimum by at most~0.03. % TODO(U4): confirm the tolerance units against the final test (tests/test_cmip6_rparity.py currently compares the summed NLL per cell)
-Equal parameters are not a meaningful target here. Each cell of the
-mini subset has 20~annual maxima, and when $a$ sits at its lower
-bound the likelihood is nearly flat in $b$ and $\gamma$, so points
-with very different parameters reach the same likelihood. The point
-R reports then depends on its random starting values.
-LEC clustering is tested apart from the optimiser: Python receives
-R's own smoothed local estimates and must reproduce R's threshold and
-$k$ exactly. EDC clustering can differ from R's \texttt{hclust} only
-in how ties between equal distances are broken, and the tests allow
-for that tie order. % TODO(U4): confirm how the EDC test handles ties (partition or merge heights)
-At full scale, the cluster counts differ from those of Contzen
-et al.\ ($k_{\text{lec}}=21$ vs.\ 24; $k_{\text{edc}}=142$ % TODO(U6): pure-Python rerun
-vs.\ 104); Section~\ref{sec:ex-fig9} discusses possible causes.
-\textbf{Level~3 ($\sim$126 tests):} simulation distributional % TODO(U4): regenerate from test inventory
-properties, checkpoint--resume, serial--parallel equivalence,
-and parameter-preset reproducibility.
+\rev{\texttt{weatherisk} contains no R code and starts no R process.
+We therefore establish its correctness by comparison with outputs of
+R that were computed once and are stored in the repository
+(\texttt{tests/reference\_data/}), so that the comparison itself runs
+without R. The stored outputs come from two sources: the R functions
+of Contzen et al.~\cite{contzen2025}, evaluated on synthetic test
+cases and on a synthetic $21{\times}21$ field, and an R workflow that
+combines these functions with R's \texttt{stl()} to run the climate
+pipeline, from detrending to clustering, on a subset of
+AWI-ESM-1-1-LR. The test suite has three levels
+(Table~\ref{tab:validation}). The criterion at each level follows from
+the kind of computation tested. Deterministic computations must agree
+with R to rounding error. Numerical optimisation is judged by the
+value of the objective it reaches, because two correct optimisers
+started from different points need not return the same parameters.
+
+\textbf{Level~1: individual functions (116 tests).}
+Each R function that \texttt{weatherisk} translates is compared with
+its Python counterpart on identical inputs. The functions include the
+grid indexing, the covariance and extremal-coefficient functions, the
+pairwise likelihood and its summands, the F-madogram, the
+ellipse-overlap distance, the spatial smoothing and the LEC merge
+heights. Deterministic functions must agree to absolute tolerances
+between $10^{-14}$ and $10^{-10}$, depending on the function. On the
+synthetic $21{\times}21$ field, the largest difference observed for
+any of them is $1.4\times10^{-14}$. The STL module is compared with
+R's \texttt{stl()} on 14~series that differ in length, period,
+seasonal window, polynomial degree, robustness and jump settings, to
+a relative tolerance of $10^{-12}$. One of these series consists
+mostly of exact zeros. For this series, a change of one unit in the
+last place of the input moves R's own trend by $7\times10^{-10}$
+(relative), so the trend is held to $10^{-9}$, the robustness weights
+to $2\times10^{-5}$, and the set of zero weights must match exactly. A further 22~tests
+cover the differences between the two languages that had to be
+resolved during the translation: column-major versus row-major
+storage, the periodicity of the rotation angle~$\gamma$, and the
+repetition of optimisations that stop at a parameter bound. Four
+tests check the treatment of tied values in the madogram ranks
+against a transcription of the R loop. Two tests cover the local and
+in-cluster optimisers and apply the likelihood criterion described
+under Level~2. One comparison is not held to rounding error. On the
+$21{\times}21$ field, many EDC distances are tied, the merge order
+among tied distances differs between \texttt{hclust} and SciPy, and
+later merge heights differ by up to $0.0032$. This test bounds the
+difference at $0.015$ and requires that at least 85\,\% of all pairs
+of cells be assigned consistently (in the same cluster or in
+different clusters) by both implementations.
+
+\textbf{Level~2: the climate pipeline on a subset (16 tests).}
+A $5{\times}5$ subset of AWI-ESM-1-1-LR with 20~years of monthly
+precipitation is run through the Python pipeline, and every stage is
+compared with the stored output of the R workflow on the same subset
+(Table~\ref{tab:pipeline-parity}). The GEV parameters are maximum
+likelihood estimates computed by different optimisation routines in
+the two languages, so they are compared to $10^{-3}$ rather than to
+rounding error.
+The local optimiser is judged by likelihood. At each of the
+25~cells, both parameter vectors are evaluated with the same
+likelihood function, and the pairwise negative log-likelihood,
+summed over all neighbour pairs of the cell, may exceed its value at
+R's optimum by at most~0.03. Equal parameters are not a meaningful
+target here. Each cell has 20~annual maxima, and when $a$ is at its
+lower bound the likelihood is nearly flat in $b$ and $\gamma$, so
+very different parameter vectors reach the same likelihood, and the
+one R reports depends on its random starting values. In the
+measurement, the Python value is lower than R's at 12~cells (by up
+to $0.27$), equal within $10^{-6}$ at the other 13, and never higher
+by more than $7.3\times10^{-7}$.
+The ellipse-overlap distance is compared with R's behaviour
+reproduced exactly, including the indexing error discussed in
+Section~\ref{sec:ex-fig9}, so that the test measures the translation
+alone. LEC clustering is tested apart from the optimiser: Python
+receives R's own smoothed local estimates and must reproduce R's
+threshold and $k$. EDC clustering must reproduce R's threshold and
+$k$ ($k_{\text{edc}}=7$). The resulting partitions are also identical
+(adjusted Rand index~1), a property we checked but that the test does
+not assert.
+Table~\ref{tab:fig9-counts} reports the cluster counts at full scale.
+
+\textbf{Level~3: structure and regression (106 tests).}
+These tests do not compare with R. They cover checkpointing and
+resumption (7~tests), equality of serial and parallel results
+(5), a static check that the package source contains no R calls
+(2), the synthetic designs of Contzen et al.~\cite{contzen2025}
+(parameter presets, the quantile threshold rule, non-stationary
+fields and the Figure~3 workflow; 39), and the remaining components
+and known regressions (53).
 
 \begin{table}[!htbp]
 \centering
 \small
 \setlength{\tabcolsep}{5pt}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.2cm}c>{\raggedright\arraybackslash}X}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.6cm}c>{\raggedright\arraybackslash}X}
 \toprule
-\textbf{Pipeline stage} & \textbf{Tests} &
-  \textbf{Agreement criterion} \\
+\textbf{Level} & \textbf{Tests} & \textbf{Criterion} \\
 \midrule
-Detrending (STL) & 2 & % TODO(U4): regenerate from test inventory
-  mean absolute difference $< 0.01$ \\
-Annual block-maxima extraction & 1 & % TODO(U4): regenerate from test inventory
-  relative error $< 10^{-10}$ \\
-GEV fitting and Fr\'{}echet transform & 1 & % TODO(U4): regenerate from test inventory
-  relative error $< 0.002$ \\
-Local parameter estimation & 5 & % TODO(U4): regenerate from test inventory
-  pairwise log-likelihood at the Python optimum at least R's, within 0.03, at every cell \\
-Spatial smoothing & 2 & % TODO(U4): regenerate from test inventory; criterion holds only if the test smooths R's local estimates
-  relative error $< 10^{-10}$ \\
-EDC dissimilarity matrix & 3 & % TODO(U4): regenerate from test inventory
-  relative error $< 10^{-10}$ \\
-EDC cluster count and labels & 4 & % TODO(U4): regenerate from test inventory
-  exact, up to the order in which tied distances are merged \\
-LEC cluster count and labels & 4 & % TODO(U4): regenerate from test inventory
-  threshold and $k$ exact, with R's smoothed local estimates as input \\
-Pipeline configuration defaults & 5 & % TODO(U4): regenerate from test inventory
-  exact \\
+1.~Individual functions & 116 &
+  absolute $10^{-14}$ to $10^{-10}$ for deterministic functions;
+  likelihood criterion for the two optimisers \\
+2.~Pipeline on a CMIP6 subset & 16 &
+  per stage (Table~\ref{tab:pipeline-parity}) \\
+3.~Structure and regression & 106 & per test \\
+\quad checkpoint and resume & 7 & correct resume \\
+\quad serial vs.\ parallel & 5 & identical output \\
+\quad no R calls in the package & 2 & none found \\
+\quad synthetic designs of~\cite{contzen2025} & 39 & per test \\
+\quad other components & 53 & per test \\
 \midrule
-\textbf{Total} & \textbf{30} & \\ % TODO(U4): regenerate from test inventory; rows above sum to 27 after removing the 3 compiled-backend tests
+\textbf{Total} & \textbf{238} & \\
 \bottomrule
 \end{tabularx}
-\caption{Per-stage comparison of the Python pipeline with stored
-  outputs of the R pipeline on a mini AWI-ESM-1-1-LR subset
-  (5$\times$5 grid, 20~years).}
-\label{tab:pipeline-parity}
+\caption{Summary of the automated test suite. With R removed from the
+  search path, the 237~tests that run by default pass in 67\,s on an
+  Apple M4 laptop; the remaining test is an end-to-end run marked as
+  slow.}
+\label{tab:validation}
 \end{table}
 
 \begin{table}[!htbp]
 \centering
 \small
-\setlength{\tabcolsep}{5pt}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.3cm}c>{\raggedright\arraybackslash}X}
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.3cm}c>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{2.6cm}}
 \toprule
-\textbf{Validation layer} & \textbf{Tests} &
-  \textbf{Agreement criterion} \\
+\textbf{Pipeline stage} & \textbf{Tests} &
+  \textbf{Criterion} & \textbf{Largest deviation} \\
 \midrule
-Per-function R parity & % TODO(U4): regenerate from test inventory
-  40 & relative error $\leq 10^{-10}$ \\
-CMIP6 end-to-end parity & % TODO(U4): regenerate from test inventory
-  30 & per-stage criteria (Table~\ref{tab:pipeline-parity}) \\
-Serial--parallel equivalence & % TODO(U4): regenerate from test inventory
-  5 & identical output \\
-Checkpoint integrity & % TODO(U4): regenerate from test inventory
-  4 & correct resume \\
-Parameter-preset reproducibility & % TODO(U4): regenerate from test inventory
-  30 & exact \\
-Component \& regression & % TODO(U4): regenerate from test inventory
-  $\sim$87 & per-test criteria \\
+STL detrending & 3 &
+  absolute difference $\leq 10^{-13}\max|x|$ & $5.8\times10^{-13}$ \\
+Annual maxima & 1 &
+  relative error $\leq 10^{-12}$ & $2.0\times10^{-14}$ \\
+GEV fit and Fr\'{e}chet transform & 1 &
+  GEV parameters: absolute $\leq 10^{-3}$; Fr\'{e}chet margins:
+  relative $\leq 2\times10^{-3}$ & $4.2\times10^{-4}$;
+  $9.6\times10^{-4}$ \\
+Local estimation & 2 &
+  $\mathrm{NLL}_{\text{Python}} \leq \mathrm{NLL}_{\text{R}} + 0.03$
+  at every cell & $+7.3\times10^{-7}$ \\
+Ellipse-overlap distance & 1 &
+  relative error $\leq 5\times10^{-15}$ & $1.9\times10^{-15}$ \\
+LEC clustering & 1 &
+  threshold within $10^{-14}$, $k$ equal, on R's smoothed estimates
+  & $k$ equal \\
+EDC madogram & 3 &
+  absolute difference $\leq 10^{-10}$ & $5\times10^{-16}$ \\
+EDC clustering & 3 &
+  threshold within $10^{-12}$, $k$ equal & $k$ equal \\
+Configuration defaults & 1 &
+  identical in both pipelines & -- \\
 \midrule
-\textbf{Total} & \textbf{196} & \\ % TODO(U4): regenerate from test inventory
+\textbf{Total} & \textbf{16} & & \\
 \bottomrule
 \end{tabularx}
-\caption{Summary of the automated validation suite.
-  All 196~tests pass in under 5~minutes on a standard laptop, % TODO(U4): regenerate count and run time from the test inventory
-  and none of them calls R.
-  The CMIP6 parity tests apply the per-stage criteria of
-  Table~\ref{tab:pipeline-parity} to a mini AWI-ESM-1-1-LR subset.}
-\label{tab:validation}
+\caption{Stage-by-stage comparison of the Python pipeline with stored
+  outputs of the R workflow on a $5{\times}5$ subset of AWI-ESM-1-1-LR
+  (20~years). $x$ denotes the monthly precipitation series;
+  NLL is the pairwise negative log-likelihood summed over the
+  neighbour pairs of a cell. The last column gives the largest
+  deviation measured in the test run.}
+\label{tab:pipeline-parity}
 \end{table}}
 
 \FloatBarrier
@@ -916,36 +1063,29 @@ climate states, and where should spatial risk aggregation be drawn
 in insurance or infrastructure planning?}
 
 \revo{\texttt{weatherisk} makes the method of Contzen
-et al.~\cite{contzen2025} available as a Python library. It replaces
-the R, shell and SLURM scripts of the original workflow with one
-package that is installed with \texttt{pip install} and does not
-need R.}
+et al.~\cite{contzen2025} available as a Python library. The complete workflow, from monthly
+model output to cluster maps, is contained in one package that is
+installed with \texttt{pip install} and does not need R.}
 
 \rev{\paragraph{Reproducibility and correctness}
-The validation suite described in Section~\ref{sec:validation}
-has three layers: (i)~per-function agreement with stored R outputs
-to $\leq 10^{-10}$ relative error, (ii)~a stage-by-stage comparison % TODO(U4): regenerate from test inventory
-on a controlled CMIP6 subset, in which the optimiser is judged by
-likelihood and LEC clustering is run on R's smoothed local estimates,
-and (iii)~structural tests covering checkpointing, parallelism, and
-parameter integrity. None of the tests needs R. % TODO(U4): confirm with R removed from PATH
+The test suite of Section~\ref{sec:validation} lets a user check an
+installation against R without installing R. It compares individual
+functions with stored R outputs, compares every stage of the climate
+pipeline on a CMIP6 subset, and checks checkpointing, parallel
+execution and the synthetic designs of the original study. The
+237~tests that run by default pass with R removed from the search
+path.
 Continuous integration runs the tests not marked as slow on every
-push and pull request to the main branch, under Python~3.10 and~3.11.
-% TODO: scripts/release_smoke_test.sh is an empty file in the repository; restore the sentence below only once the script exists and has been run.
-% A dedicated smoke test script (\texttt{scripts/release\_smoke\_test.sh})
-% provides a quick end-to-end check: it installs the package in a clean
-% environment, runs the CLI, and confirms that the core pipeline completes
-% correctly within about one minute.
-}
+push and pull request to the main branch, under Python~3.10 and~3.11.}
 
 \paragraph{Computational efficiency}
 Section~\ref{sec:performance} describes the vectorisation and
-parallelisation used. On a $21 \times 21$ synthetic grid (441~cells),
-the EDC dissimilarity matrix is computed in 0.02\,s, and the full % TODO(U6): pure-Python rerun; no current measurement supports 0.02 s or under 1 s
-pipeline including 8-core parallel estimation completes in under 1\,s.
-\rev{On the full AWI-ESM-1-1-LR T63 grid (18{,}432 cells,
-156~years), the pipeline completed in approximately 4~hours % TODO(U6): pure-Python rerun
-on 16~cores of the AWI \emph{albedo} HPC cluster.}
+parallelisation used. A $6{\times}6$ subset runs in about 16\,s on a
+laptop, and the full AWI-ESM-1-1-LR T63 grid (18{,}432 cells,
+156~years) in 26--36\,h on 64~cores of the AWI \emph{albedo} HPC
+cluster (Table~\ref{tab:timing}). The pipeline writes a checkpoint
+after each step, and after each cluster within the final step, so an
+interrupted run resumes from the last completed unit of work.
 
 \revg{The pairwise dissimilarity matrix has $n^2$ entries for $n$
 grid cells, and this quadratic cost remains the main limit on grid
@@ -985,31 +1125,31 @@ clusters the grid cells. It does not run local estimation.
 \revo{We have presented \texttt{weatherisk}, a Python package that
 implements the complete pipeline for spatial clustering of climate
 extremes via max-stable processes. The package covers the full
-preprocessing chain---STL detrending, annual block-maxima extraction,
+preprocessing chain---optional STL detrending, annual block-maxima extraction,
 GEV fitting, and Fr\'{e}chet transformation---followed by local
 composite-likelihood estimation of anisotropy parameters and
 regionalisation using Local Estimates Clustering (LEC) or Extremal
-Dependence Clustering (EDC)~\cite{contzen2025}. It replaces the R and
-shell scripts of the original workflow with a single tested Python
-library that is installed with \texttt{pip install} and runs without
-R.}
+Dependence Clustering (EDC)~\cite{contzen2025}. The whole workflow is
+contained in a single tested Python library that is installed with
+\texttt{pip install} and runs without R.}
 
 \revg{The software is tested at three levels against stored outputs
-of the R implementation of Contzen et al.~\cite{contzen2025}, and
-none of the tests calls R. % TODO(U4): confirm with R removed from PATH
-Deterministic functions agree to $\leq 10^{-10}$ relative error. On a % TODO(U4): regenerate from test inventory
-controlled CMIP6 subset, the summed pairwise negative log-likelihood
-at the Python optimum exceeds its value at R's optimum by at most 0.03 % TODO(U4): confirm the tolerance units against the final test
-at every cell. Parameter values are not compared, because on this
-subset the likelihood is nearly flat in $b$ and $\gamma$ at cells
-where $a$ is at its lower bound. LEC
-clustering reproduces R's threshold and $k$ exactly when it receives
-R's smoothed local estimates, and EDC clustering agrees with R up to
-the order in which tied distances are merged. % TODO(U4): confirm how the EDC test handles ties (partition or merge heights)
-Structural and regression tests cover checkpointing, parallelism, and
-parameter integrity. The full Figure~9 \revb{case-study application}
-on the AWI-ESM-1-1-LR T63 grid shows that \texttt{weatherisk} runs at % TODO(U6): pure-Python rerun
-publication scale on HPC infrastructure.}
+of R, and none of the 238~tests calls R. Deterministic functions are
+held to absolute tolerances between $10^{-14}$ and $10^{-10}$; the
+only exception is the EDC merge heights on a synthetic field with
+many tied distances, where the merge order among ties differs. On a CMIP6 subset, the negative log pairwise
+likelihood reached by the local optimiser must not exceed R's by more
+than~0.03 at any cell; measured, it is lower at 12 of 25 cells and
+never higher by more than $10^{-6}$. Parameter values are not compared, because the
+likelihood of this subset is nearly flat in $b$ and $\gamma$ where
+$a$ is at its lower bound. EDC, and LEC applied to R's smoothed
+local estimates, reproduce R's threshold and number of clusters on
+this subset. The full Figure~9
+\revb{case study} on the AWI-ESM-1-1-LR T63 grid ran in 26 to 36~hours
+on 64~cores. Without detrending it reproduces the published EDC count
+of 104 and gives 23 LEC clusters against 24; the dependence of the
+counts on detrending (Section~\ref{sec:ex-fig9}) shows that the
+preprocessing has to be reported with the clustering.}
 
 \revg{The clusters condense a large climate field into a small set of
 regions in which extremes co-occur. Such regions are the spatial units
@@ -1046,6 +1186,7 @@ detecting structural regime shifts.}
 %% ============================================================
 \section*{Acknowledgements}
 %% ============================================================
+% AUTHOR CHECK: r_code/ is J. Contzen's simulation-study code; confirm that it is public before keeping "publicly available", and confirm the "helpful discussions".
 
 The authors thank the Alfred Wegener Institute Helmholtz Centre for
 Polar and Marine Research (AWI) for access to the \emph{albedo}
@@ -1065,7 +1206,6 @@ and approved the final version.
 W.~Kchikach is supported by the MarDATA Helmholtz School for Marine
 Data Science (grant no.\ HIDSS-0005). G.~Lohmann acknowledges
 support from the ERC Synergy Grant ``i2B'' (grant no.\ 101118519).
-% TODO: confirm T. Dickhaus funding
 
 %% ============================================================
 \section*{\revn{Declaration of Competing Interests}}
@@ -1154,7 +1294,7 @@ plot_cluster_comparison(
 \begin{lstlisting}[caption={\revb{Running the Figure~9 case study} on HPC or
   locally.}, label=lst:app-fig9]
 # On HPC (albedo SLURM cluster):
-$ sbatch hpc/run_fig9_clean.slurm
+$ sbatch hpc/run_fig9_pyonly.slurm
 
 # Or locally (requires CMIP6 data):
 $ python scripts/reproduce_fig9.py \

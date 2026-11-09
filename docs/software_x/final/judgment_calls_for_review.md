@@ -77,12 +77,18 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
 
 ## C. Paper and release items that need you
 
-1. **Version bump and Zenodo DOI.** The paper still lists v0.1.1 and the old DOI with TODOs. A new tag and a push are needed, which I did not do.
-2. **T. Dickhaus funding.** Not known. He is currently omitted from the funding sentence.
-3. **Module count.** The paper says 18 modules. `git ls-files` shows 21 modules plus `cli.py`. To be recounted at the release tag.
-4. **Motivation section.** Left as Thorsten corrected it.
-5. **Test counts in the paper.** Will be regenerated from the final test inventory.
-6. **CI.** Whether GitHub CI has R available was not checked. The R-free suite does not need it.
+Updated 2026-11-09. Lines marked `% RELEASE BLOCKER` or `% AUTHOR CHECK` in v23.tex and cover_letter.tex are the open items. A search for those two strings lists all of them.
+
+1. **Version bump and Zenodo DOI.** Metadata C1 says v0.2.0, but `__version__` and `pyproject.toml` still say 0.1.1 and C3 still has the v0.1.1 DOI. Tagging v0.2.0, the Zenodo release and the push are yours to do. The cover letter says v0.2.0 with the same blocker.
+2. **Example 1 (stripes) is stale.** Its k values, figure and text come from a run made before R was removed. The rerun is albedo job 48947462 (pure Python, seed 42, output `weatherisk_pyonly/output/fig2_stripes_seed42_48947462/`). It was still running at 27 min elapsed on 2026-11-09. Replace the figure and numbers when it finishes. The embedded title "Fig. 3 — EDC vs LEC" in the current image is also stale.
+3. **Acknowledgement of J. Contzen (AUTHOR CHECK).** The paper calls `r_code/` "publicly available". Confirm that it is, and confirm the "helpful discussions", before submission.
+4. **T. Dickhaus funding.** Not known. He is omitted from the funding sentence.
+5. **Cover letter (AUTHOR CHECK).** It states that all authors have read the final version. That must be true on the day of submission.
+6. **Module count.** The paper says 22 modules and a CLI entry point. `git ls-files` agrees (23 files under `weatherisk/` besides `__init__.py`, one of them `cli.py`). `koch_risk.py` and `risk_pipeline.py` exist locally but are not tracked.
+7. **Test counts.** The paper reports 238 tests (Level 1: 116, Level 2: 16, Level 3: 106). With R removed from the search path, the 237 tests that run by default pass in 67 s on an Apple M4 laptop; the remaining test is the slow end-to-end run. Recount if tests change before the tag.
+8. **Paper structure.** `docs/software_x/AGENTS.md` describes four illustrations (transformation chain, Fig 3, LEC map, GDP-weighted LEC map). The paper keeps its two examples. Not changed.
+9. **Motivation section.** Left as Thorsten corrected it.
+10. **CI.** Whether GitHub CI has R available was not checked. The R-free suite does not need it.
 
 ## D. Process notes (for transparency)
 
@@ -136,7 +142,7 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
    | No detrending (48932579) | 23 | 104 |
    | Published (Contzen et al. 2025) | 24 | 104 |
 
-   Without detrending both counts are at or next to the published ones. With STL, k_LEC is 14, far from 24. k_LEC depends on the optimizer through the local estimates, so 23 versus 24 is within what we would expect from a different optimizer (inference, not tested). The March 2026 STL run with the old R backend gave k_LEC 21 and k_EDC 142. Both jobs completed (measured, `sacct`): STL 36:02:48 wall time, max RSS 38.2 GB; no-detrend 25:58:03, max RSS 39.8 GB, both on 64 CPUs. This contradicts the paper's "approximately 4 hours" (v23.tex lines 583 and 947), which must be corrected. Step 6 runs one worker per cluster, LEC clusters first, so the largest LEC cluster (3247 and 6230 cells) ran alone for hours while the other cores idled (measured with `ps` inside the jobs on 2026-11-08; average CPU use 2214 % and 3016 % of 6400 %). The cluster counts in the final `pipeline_results.npz` equal the step-5 counts above.
+   Without detrending both counts are at or next to the published ones. With STL, k_LEC is 14, far from 24. k_LEC depends on the optimizer through the local estimates, so 23 versus 24 is within what we would expect from a different optimizer (inference, not tested). The March 2026 STL run with the old R backend gave k_LEC 21 and k_EDC 142. Both jobs completed on 64 CPUs (measured, `sacct`): STL 36:02:48 wall time, no-detrend 25:58:03. Memory needs two numbers. `sacct` MaxRSS for the whole job is 95 GiB (STL) and 85 GiB (no-detrend). The largest single process, from `/usr/bin/time -v`, is 38.2 GB (STL) and 39.8 GB (no-detrend). An earlier version of this note called the per-process figure the job's max RSS, which was wrong. The paper's "approximately 4 hours" was removed on 2026-11-09 and Table 2 now gives the measured times. Step 6 runs one worker per cluster, LEC clusters first, so the largest LEC cluster (3247 and 6230 cells) ran alone for hours while the other cores idled (measured with `ps` inside the jobs on 2026-11-08; average CPU use 2214 % and 3016 % of 6400 %). The cluster counts in the final `pipeline_results.npz` equal the step-5 counts above.
 
    Agreement with the March 2026 STL run (R backend, `output/cmip6_fig9/pipeline_results.npz`), measured locally:
 
@@ -153,12 +159,21 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
    The March run detrended with a different STL implementation than the current NumPy port of R's `stl()`. The year-rank changes show that the detrended series differ in almost every cell, which explains why the March EDC labels are not reproduced exactly (inference). The cause has not been traced further; the full-grid check of the STL port against R's `stl_trend.f64le.bin.gz` is still open.
    Both jobs loaded the code from before the switch to min ranks (item E6). `hpc/r_reference/edc_labels_rule_check.py` recomputed the EDC labels from each run's step-2 checkpoint under both rules. Average ranks reproduce the step-5 checkpoint labels exactly, and min ranks give identical labels in both runs (0 cells differ). So the runs need no restart.
 
-5. **What the SoftwareX paper should say.** v23.tex line ~743 currently says "we attribute this primarily to differences in preprocessing". This has not been tested. Proposed replacement, not yet in the paper:
-   "Contzen et al. do not state their STL settings. With the STL settings used here, the deterministic EDC chain gives k_EDC between 137 and 147 across the variants we tried. Without detrending it gives 104 to 106, depending only on how ties in the dendrogram are broken."
-   This is a statement about a paper that T. Dickhaus and G. Lohmann coauthored, so it needs their agreement before it goes in.
+5. **What the SoftwareX paper says (changed 2026-11-09).** The untested sentence "we attribute this primarily to differences in preprocessing" is gone. Widad decided on 2026-11-09 to make the paper edits without waiting for supervisor review and to share this document afterwards. Correction to the proposal that stood here: Contzen et al. do state that the data were detrended with STL. They do not report the STL settings. The paper now says exactly that (v23.tex, Example 2 discussion), reports both runs as equal rows, and makes no claim about which preprocessing produced the published counts. It also gives the sensitivity results of the sweep (137 to 147 across STL variants, 140 with R's merge order, 139 to 142 under tie permutations, and a quantile level of about 0.34 needed for 104 with STL). **Supervisors.** Please check that this description of your 2025 paper is fair.
 
 6. **Rank rule for tied maxima.** `c_extrcoeff_matrix` ranks each year as `sum(x[k] <= x)`, the number of years with a maximum at least as large. The madogram uses only rank differences, so this is equivalent to SciPy `rankdata(method="min")`. A check on tied integer data matched R bitwise with `"min"` and not with `"max"` or `"average"`.
    weatherisk used average ranks in four copies of the ranking and `method="max"` in `clustering.c_extrcoeff_matrix`. The rules differ only when a cell has tied annual maxima. That happens in 231 cells without detrending and in none with STL, so the STL results and the F1 check are unaffected.
    Effect on the full grid (job 48932523). Without detrending, k is 104 (SciPy) and 106 (R order) under `"min"`, `"average"` and `"max"`. The rule does not change k here. Decision (Widad, 2026-11-07). Follow the reference code. All five rank sites now call `clustering.madogram_ranks`, which computes `sum(x[k] <= x)` exactly. `tests/test_clustering.py::TestMadogramTies` compares `c_extrcoeff_matrix`, the CMIP6 EDC and the CPC EDC with a line-by-line transcription of the R loop on tied data; three of its tests fail on the previous code. No number reported so far changes.
 
 7. `docs/maternity_leave_progress_update_june2026.md:37` lists "104 EDC / 24 LEC" as our reproduction. That was never our result. The file is your June report, so it was left unchanged.
+
+## F. Paper edits of 2026-11-09 and the defaults behind them
+
+Made without supervisor review at Widad's request. Each default can be reversed.
+
+1. **Validation section rewritten.** Three levels with counts, criteria and the largest measured deviations (tables `tab:validation` and `tab:pipeline-parity`). Tolerances in the text are the ones the tests assert after commit 1acca38.
+2. **Optimizer claim.** The paper states the criterion (NLL at most R's + 0.03 per cell) and the measurement (lower at 12 of 25 cells, equal within 1e-6 at 13, never higher by more than 7.3e-7). It does not say "at least as good as R" without the tolerance.
+3. **Figure 9.** Both runs appear as a 2x2 figure and a table of counts and run times. The comparison with the March run (ARI 0.559 / 0.721) is not in the paper, because that run used a different STL implementation whose cause is untraced (E4).
+4. **Speed claims.** The comparison with R speed, the 21x21 timing and the "4 hours" were removed. The paper gives the 6x6 laptop time (median 16.25 s) and the measured full-grid times.
+5. **Checkpoint claim.** The paper says a checkpoint is written after each step and after each cluster within the final step. It no longer says the runs fit batch-queue limits, because step 3 has no partial checkpoint and took about 12 h.
+6. **Abstract and conclusions.** Detrending is described as optional; both runs' counts are given.
