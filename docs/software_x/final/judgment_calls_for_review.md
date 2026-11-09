@@ -131,12 +131,26 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
    Step-5 results (measured, logs `fig9_pyonly_48932578.out` and `_48932579.out`):
 
    | Run | k_LEC | k_EDC |
-|---|---|---|
+   |---|---|---|
    | STL detrending (48932578) | 14 | 142 |
    | No detrending (48932579) | 23 | 104 |
    | Published (Contzen et al. 2025) | 24 | 104 |
 
-   Without detrending both counts are at or next to the published ones. With STL, k_LEC is 14, far from 24. k_LEC depends on the optimizer through the local estimates, so 23 versus 24 is within what we would expect from a different optimizer (inference, not tested). The March 2026 STL run with the old R backend gave k_LEC 21 and k_EDC 142. Step 6 (in-cluster re-estimation) is still running. It runs one worker per cluster and saves `step6_lec.npz` after each finished cluster. At 2026-11-08 09:04 CET, 13 of 14 LEC clusters were done in the STL run (the 3247-cell cluster still running) and 22 of 23 in the no-detrend run (the 6230-cell cluster still running). The EDC clusters are smaller (largest 1022 and 1169 cells).
+   Without detrending both counts are at or next to the published ones. With STL, k_LEC is 14, far from 24. k_LEC depends on the optimizer through the local estimates, so 23 versus 24 is within what we would expect from a different optimizer (inference, not tested). The March 2026 STL run with the old R backend gave k_LEC 21 and k_EDC 142. Both jobs completed (measured, `sacct`): STL 36:02:48 wall time, max RSS 38.2 GB; no-detrend 25:58:03, max RSS 39.8 GB, both on 64 CPUs. This contradicts the paper's "approximately 4 hours" (v23.tex lines 583 and 947), which must be corrected. Step 6 runs one worker per cluster, LEC clusters first, so the largest LEC cluster (3247 and 6230 cells) ran alone for hours while the other cores idled (measured with `ps` inside the jobs on 2026-11-08; average CPU use 2214 % and 3016 % of 6400 %). The cluster counts in the final `pipeline_results.npz` equal the step-5 counts above.
+
+   Agreement with the March 2026 STL run (R backend, `output/cmip6_fig9/pipeline_results.npz`), measured locally:
+
+   | Comparison | Value |
+   |---|---|
+   | Adjusted Rand index, LEC labels, STL new vs March | 0.559 |
+   | Adjusted Rand index, EDC labels, STL new vs March | 0.721 |
+   | Adjusted Rand index, LEC labels, STL vs no-detrend (new) | 0.341 |
+   | Adjusted Rand index, EDC labels, STL vs no-detrend (new) | 0.534 |
+   | Median abs. difference of local estimates (a, b, gamma), STL new vs March | 0.008, 0.013, 0.001 |
+   | Cells whose annual-maxima year ranks differ, STL new vs March | 18230 of 18432 (median max shift 3 ranks) |
+   | Median relative difference of Frechet margins, STL new vs March | 2.1 % (99th percentile 19.7 %) |
+
+   The March run detrended with a different STL implementation than the current NumPy port of R's `stl()`. The year-rank changes show that the detrended series differ in almost every cell, which explains why the March EDC labels are not reproduced exactly (inference). The cause has not been traced further; the full-grid check of the STL port against R's `stl_trend.f64le.bin.gz` is still open.
    Both jobs loaded the code from before the switch to min ranks (item E6). `hpc/r_reference/edc_labels_rule_check.py` recomputed the EDC labels from each run's step-2 checkpoint under both rules. Average ranks reproduce the step-5 checkpoint labels exactly, and min ranks give identical labels in both runs (0 cells differ). So the runs need no restart.
 
 5. **What the SoftwareX paper should say.** v23.tex line ~743 currently says "we attribute this primarily to differences in preprocessing". This has not been tested. Proposed replacement, not yet in the paper:
