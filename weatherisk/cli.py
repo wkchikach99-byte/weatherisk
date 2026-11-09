@@ -183,7 +183,9 @@ def cmip6(
 
     \b
     Paper parameters: ν=5, α=1, ε=5 (grid point distance)
-    Expected: k_EDC ≈ 104, k_LEC ≈ 24
+    Published (Contzen et al. 2025): k_EDC = 104, k_LEC = 24.
+    weatherisk with STL detrending gives k_EDC = 142, k_LEC = 14;
+    without detrending (scripts/reproduce_fig9.py --no-detrend) 104 and 23.
 
     \b
     Example:

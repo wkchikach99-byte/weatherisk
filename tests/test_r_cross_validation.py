@@ -64,8 +64,8 @@ class TestGridCoordinates:
     def test_axes(self):
         ref_x = pd.read_csv(REF / "x_axis.csv")["x_ax"].values
         ref_y = pd.read_csv(REF / "y_axis.csv")["y_ax"].values
-        np.testing.assert_allclose(self.grid.x_ax, ref_x, atol=1e-12)
-        np.testing.assert_allclose(self.grid.y_ax, ref_y, atol=1e-12)
+        np.testing.assert_allclose(self.grid.x_ax, ref_x, atol=1e-12, rtol=0)
+        np.testing.assert_allclose(self.grid.y_ax, ref_y, atol=1e-12, rtol=0)
 
     def test_grid_coordinates_match_r(self):
         """Every R coordinate pair exists in the Python grid."""
@@ -81,8 +81,8 @@ class TestGridCoordinates:
 
         ref = pd.read_csv(REF / "dist_helper_test_cases.csv")
         for _, row in ref.iterrows():
-            np.testing.assert_allclose(dist_x(row["x1"], row["x2"]), row["dist_x"], atol=1e-14)
-            np.testing.assert_allclose(dist_y(row["y1"], row["y2"]), row["dist_y"], atol=1e-14)
+            np.testing.assert_allclose(dist_x(row["x1"], row["x2"]), row["dist_x"], atol=1e-14, rtol=0)
+            np.testing.assert_allclose(dist_y(row["y1"], row["y2"]), row["dist_y"], atol=1e-14, rtol=0)
 
     def test_grid_number_matches_r(self):
         """grid_number / number_grid round-trip (accounting for 0/1-based)."""
@@ -198,7 +198,7 @@ class TestExtremalCoeffConversion:
         for _, row in ref.iterrows():
             py_val = cov_to_ec(row["df"], row["cov"])
             np.testing.assert_allclose(
-                py_val, row["ec"], atol=1e-10,
+                py_val, row["ec"], atol=1e-10, rtol=0,
                 err_msg=f"cov_to_ec(df={row['df']}, cov={row['cov']})"
             )
 
@@ -209,7 +209,7 @@ class TestExtremalCoeffConversion:
             py_val = ec_to_cov(row["df"], row["ec"])
             target_ec = min(row["ec"], cov_to_ec(row["df"], 0.0))
             np.testing.assert_allclose(
-                cov_to_ec(row["df"], py_val), target_ec, atol=1e-14,
+                cov_to_ec(row["df"], py_val), target_ec, atol=1e-14, rtol=0,
                 err_msg=f"ec_to_cov(df={row['df']}, ec={row['ec']})"
             )
 
@@ -230,7 +230,7 @@ class TestPairwiseDensity:
         for _, row in ref.iterrows():
             py_val = _dtdiff(row["x"], row["df"])
             np.testing.assert_allclose(
-                py_val, row["dtdiff_value"], atol=1e-12,
+                py_val, row["dtdiff_value"], atol=1e-12, rtol=0,
                 err_msg=f"dtdiff({row['x']}, {row['df']})"
             )
 
@@ -279,7 +279,7 @@ class TestCovarianceMatrices:
                     X_f[i] - X_f[j], Y_f[i] - Y_f[j],
                     alpha=1.0, a=2.0, b=1.0, g=0.0
                 )
-        np.testing.assert_allclose(py_cov, ref, atol=1e-12)
+        np.testing.assert_allclose(py_cov, ref, atol=1e-12, rtol=0)
 
     def test_nonstationary_covariance_matrix(self):
         from weatherisk.covariance import cov_fkt_2d_nonstat2
@@ -307,7 +307,7 @@ class TestCovarianceMatrices:
                     a1=a_f[i], b1=b_f[i], g1=g_f[i],
                     a2=a_f[j], b2=b_f[j], g2=g_f[j],
                 )
-        np.testing.assert_allclose(py_cov, ref, atol=1e-10)
+        np.testing.assert_allclose(py_cov, ref, atol=1e-10, rtol=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -362,7 +362,7 @@ class TestMadogramMatrix:
             for r_j in range(n):
                 ref_reindexed[mapping[r_i], mapping[r_j]] = ref_mado[r_i, r_j]
 
-        np.testing.assert_allclose(py_mado, ref_reindexed, atol=1e-12,
+        np.testing.assert_allclose(py_mado, ref_reindexed, atol=1e-12, rtol=0,
                                    err_msg="Madogram matrix mismatch")
 
     def test_extremal_coefficient_matrix(self):
@@ -384,7 +384,7 @@ class TestMadogramMatrix:
             for r_j in range(n):
                 ref_reindexed[mapping[r_i], mapping[r_j]] = ref_ec[r_i, r_j]
 
-        np.testing.assert_allclose(py_ec, ref_reindexed, atol=1e-12,
+        np.testing.assert_allclose(py_ec, ref_reindexed, atol=1e-12, rtol=0,
                                    err_msg="Extremal coefficient matrix mismatch")
 
 
@@ -425,7 +425,7 @@ class TestEllipseDissimilarity:
             for r_j in range(n):
                 ref_reindexed[mapping[r_i], mapping[r_j]] = ref_dist[r_i, r_j]
 
-        np.testing.assert_allclose(py_dist, ref_reindexed, atol=1e-12,
+        np.testing.assert_allclose(py_dist, ref_reindexed, atol=1e-12, rtol=0,
                                    err_msg="Ellipse dissimilarity matrix mismatch")
 
 
@@ -472,9 +472,9 @@ class TestSmoothing:
             expected[py_idx, 2] = ref_smooth.iloc[r_idx]["g_sm"]
 
         # a and b should match closely (simple arithmetic mean)
-        np.testing.assert_allclose(py_smooth[:, 0], expected[:, 0], atol=1e-12,
+        np.testing.assert_allclose(py_smooth[:, 0], expected[:, 0], atol=1e-12, rtol=0,
                                    err_msg="Smoothed 'a' mismatch")
-        np.testing.assert_allclose(py_smooth[:, 1], expected[:, 1], atol=1e-12,
+        np.testing.assert_allclose(py_smooth[:, 1], expected[:, 1], atol=1e-12, rtol=0,
                                    err_msg="Smoothed 'b' mismatch")
 
     def test_smoothing_gamma(self):
@@ -502,7 +502,7 @@ class TestSmoothing:
             py_idx = mapping[r_idx]
             expected_g[py_idx] = ref_smooth.iloc[r_idx]["g_sm"]
 
-        np.testing.assert_allclose(py_smooth[:, 2], expected_g, atol=1e-12,
+        np.testing.assert_allclose(py_smooth[:, 2], expected_g, atol=1e-12, rtol=0,
                                    err_msg="Smoothed 'gamma' mismatch")
 
 
@@ -546,7 +546,7 @@ class TestClustering:
         py_heights = np.sort(hc[:, 2])
         r_heights = np.sort(ref_hc["height"].values)
 
-        np.testing.assert_allclose(py_heights, r_heights, atol=1e-12,
+        np.testing.assert_allclose(py_heights, r_heights, atol=1e-12, rtol=0,
                                    err_msg="LEC merge heights mismatch")
 
     def test_saunders_cluster_count(self):
@@ -583,7 +583,7 @@ class TestClustering:
         py_heights = np.sort(hc[:, 2])
         r_heights = np.sort(ref_hc["height"].values)
 
-        np.testing.assert_allclose(py_heights, r_heights, atol=0.015,
+        np.testing.assert_allclose(py_heights, r_heights, atol=0.015, rtol=0,
                                    err_msg="Saunders merge heights mismatch")
 
     def test_lec_cluster_assignments_equivalent(self):
@@ -773,7 +773,7 @@ class TestPipelineIntegration:
             for r_j in range(n):
                 ref_reindexed[mapping[r_i], mapping[r_j]] = ref_mado[r_i, r_j]
 
-        np.testing.assert_allclose(py_mado, ref_reindexed, atol=1e-12)
+        np.testing.assert_allclose(py_mado, ref_reindexed, atol=1e-12, rtol=0)
 
         # Step 3: Cluster
         ref_params = pd.read_csv(REF / "saunders_clustering_params.csv")

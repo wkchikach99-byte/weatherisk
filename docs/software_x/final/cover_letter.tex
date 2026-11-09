@@ -34,12 +34,12 @@ submitting for consideration in \textit{SoftwareX}.
 The work grew out of a practical need we kept running into during our
 own research: applying spatial-extremes methods to gridded climate
 output requires chaining together several technically demanding
-steps---trend removal, block-maxima extraction, GEV fitting,
+steps---optional trend removal, block-maxima extraction, GEV fitting,
 Fr\'{e}chet transformation, local max-stable parameter estimation,
 and finally clustering---and there was no single Python tool that
-handled all of them. Contzen, Dickhaus and Lohmann (``Regionalization
-approaches for the spatial analysis of extremal dependence'',
-\textit{Extremes}, 2025,
+handled all of them. In an earlier study with J.~Contzen, two of us
+(Contzen, Dickhaus and Lohmann, ``Regionalization approaches for the
+spatial analysis of extremal dependence'', \textit{Extremes}, 2025,
 \url{https://doi.org/10.1007/s10687-025-00519-2}) introduced the two
 clustering methods we implement and applied them to CMIP6 precipitation,
 using R functions written for that study. Those functions cover the
@@ -54,10 +54,12 @@ The package (MIT licence, v0.2.0; archived at
 pipeline through both a command-line interface and a Python API. Two
 clustering approaches are supported, Local Estimates Clustering (LEC)
 and Extremal Dependence Clustering (EDC), and neither installation nor
-use requires R. The test suite compares individual functions and each
-pipeline stage with outputs of R that were computed once and are stored
-in the repository. Deterministic functions agree with these outputs to
-within $10^{-10}$ or better. The local optimiser is judged by the
+use requires R. The test suite compares individual functions and, on
+synthetic data, the stages of the climate pipeline with outputs of R
+that were computed once and are stored in the repository.
+Deterministic functions agree with these outputs to absolute
+tolerances between $10^{-14}$ and $10^{-10}$, and the STL
+decomposition to a relative tolerance of $10^{-12}$. The local optimiser is judged by the
 likelihood it reaches, because on short series the pairwise likelihood
 is too flat for a comparison of parameter values to be meaningful. As
 a demonstration, we revisit the published precipitation clustering for
@@ -69,9 +71,9 @@ runs, because the published study names STL but not its
 settings and the cluster counts depend on them.
 
 \bigskip
-The manuscript follows the SoftwareX author guidelines.
-It contains the mandatory metadata table, a description of the
-seven-stage pipeline, two worked examples (a synthetic validation and
+% AUTHOR CHECK: the manuscript is about 6,000 words and adds a "Model validation" section to the five required sections; confirm both with the current Guide for Authors before claiming compliance here
+The manuscript contains the mandatory metadata tables, a description of the
+six-stage pipeline, two worked examples (a synthetic validation and
 the AWI-ESM-1-1-LR case study) with their result figures, and a code
 appendix with the code for both examples. The source code is publicly available on GitHub and permanently
 archived on Zenodo.
@@ -81,7 +83,9 @@ archived on Zenodo.
 W.~Kchikach built the software, ran all experiments, and wrote the
 paper. T.~Dickhaus and G.~Lohmann guided the scientific direction and
 reviewed the manuscript. All authors have read the final version and
-agree to this submission. We have no competing interests to declare.
+agree to this submission. The manuscript has not been published and is
+not under consideration for publication elsewhere. We have no
+competing interests to declare.
 
 \bigskip
 We hope \texttt{weatherisk} will be useful to researchers working at

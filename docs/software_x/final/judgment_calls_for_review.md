@@ -21,8 +21,8 @@ The full decision trail with timestamps is `.audit/remove-r-runtime.tsv` (local,
 
 3. **Optimizer start count is larger than R's.**
    R uses 5 random starts (`locest_ensemble = 5`). Python uses SciPy L-BFGS-B from Latin-hypercube starts.
-   With 5 starts Python was worse than R by more than 0.03 at some cells. The sweep found that 50 plain LHS starts is the smallest tested budget that meets the criterion on 10 selection and 10 held-out seeds (worst margin +0.0287, close to 0.03).
-   Plain LHS designs are not nested, so 40 starts failed where 20 passed. A nested design was being tested at the time of writing.
+   With 5 starts Python was worse than R by more than 0.03 at some cells. The sweep found that 50 plain LHS starts is the smallest tested budget that meets the criterion. Re-measured on 2026-11-09 over 30 cells (25 mini cells, 5 cells of the 10x10 field): 50 starts pass for all 21 seeds 0–9, 42 and 100–109, worst excess +0.0287 (seeds 4 and 103, cell mini:16), only 0.0013 inside the tolerance. The recurring value suggests a secondary local optimum at that cell. Of seeds 0–9, 6 fail with 20 starts (worst +1.13) and 4 with 40 (worst +0.79); 1 of seeds 100–109 and seed 42 fail with 40. The first sweep's "20 fails 5/10" used a seed set that was not recorded and is not reproduced; the paper now gives the re-measured numbers.
+   Plain LHS designs are not nested, so 40 starts can fail where 20 pass. The nested design was not adopted.
    This is an optimizer setting, not a model change. It increases run time roughly in proportion.
    Alternative. Keep 5 starts and report the likelihood gap instead of asserting the criterion.
 
@@ -85,7 +85,7 @@ Updated 2026-11-09. Lines marked `% RELEASE BLOCKER` or `% AUTHOR CHECK` in v23.
 4. **T. Dickhaus funding.** Not known. He is omitted from the funding sentence.
 5. **Cover letter (AUTHOR CHECK).** It states that all authors have read the final version. That must be true on the day of submission.
 6. **Module count.** The paper says 22 modules and a CLI entry point. `git ls-files` agrees (23 files under `weatherisk/` besides `__init__.py`, one of them `cli.py`). `koch_risk.py` and `risk_pipeline.py` exist locally but are not tracked.
-7. **Test counts.** The paper reports 238 tests (Level 1: 116, Level 2: 16, Level 3: 106). With R removed from the search path, the 237 tests that run by default pass in 67 s on an Apple M4 laptop; the remaining test is the slow end-to-end run. Recount if tests change before the tag.
+7. **Test counts.** The committed tree has 235 tests (Level 1: 116, Level 2: 16, Level 3: 103). An earlier count of 238 included `tests/test_risk_pipeline.py` (3 tests), which is gitignored since commit 683d167 and is not in the public repository. With R removed from the search path, `pytest` runs every test (there is no `addopts`) and they pass in about 134 s on an Apple M4 laptop (measured 2026-11-09 by two independent runs under a load of about 3). `pytest -m "not slow"`, which CI runs, skips one end-to-end test that takes 1.5 s. An earlier note said 67 s; that figure was not reproduced, so the paper now says "about 2 min". Recount if tests change before the tag.
 8. **Paper structure.** `docs/software_x/AGENTS.md` describes four illustrations (transformation chain, Fig 3, LEC map, GDP-weighted LEC map). The paper keeps its two examples. Not changed.
 9. **Motivation section.** Left as Thorsten corrected it.
 10. **CI.** Whether GitHub CI has R available was not checked. The R-free suite does not need it.
@@ -142,7 +142,7 @@ Updated 2026-11-09. Lines marked `% RELEASE BLOCKER` or `% AUTHOR CHECK` in v23.
    | No detrending (48932579) | 23 | 104 |
    | Published (Contzen et al. 2025) | 24 | 104 |
 
-   Without detrending both counts are at or next to the published ones. With STL, k_LEC is 14, far from 24. k_LEC depends on the optimizer through the local estimates, so 23 versus 24 is within what we would expect from a different optimizer (inference, not tested). The March 2026 STL run with the old R backend gave k_LEC 21 and k_EDC 142. Both jobs completed on 64 CPUs (measured, `sacct`): STL 36:02:48 wall time, no-detrend 25:58:03. Memory needs two numbers. `sacct` MaxRSS for the whole job is 95 GiB (STL) and 85 GiB (no-detrend). The largest single process, from `/usr/bin/time -v`, is 38.2 GB (STL) and 39.8 GB (no-detrend). An earlier version of this note called the per-process figure the job's max RSS, which was wrong. The paper's "approximately 4 hours" was removed on 2026-11-09 and Table 2 now gives the measured times. Step 6 runs one worker per cluster, LEC clusters first, so the largest LEC cluster (3247 and 6230 cells) ran alone for hours while the other cores idled (measured with `ps` inside the jobs on 2026-11-08; average CPU use 2214 % and 3016 % of 6400 %). The cluster counts in the final `pipeline_results.npz` equal the step-5 counts above.
+   Without detrending both counts are at or next to the published ones. With STL, k_LEC is 14, far from 24. k_LEC depends on the optimizer through the local estimates, so 23 versus 24 is within what we would expect from a different optimizer (inference, not tested). The March 2026 STL run with the old R backend gave k_LEC 21 and k_EDC 142. Both jobs completed on 64 CPUs (measured, `sacct`): STL 36:02:48 wall time, no-detrend 25:58:03. Memory needs two numbers. `sacct` MaxRSS for the whole job is 95 GiB (STL) and 85 GiB (no-detrend). The largest single process, from `/usr/bin/time -v`, is 38,178,196 KiB = 36.4 GiB (STL) and 39,809,608 KiB = 38.0 GiB (no-detrend). An earlier version of this note called the per-process figure the job's max RSS, which was wrong. The paper's "approximately 4 hours" was removed on 2026-11-09 and Table 2 now gives the measured times. Step 6 runs one worker per cluster, LEC clusters first, so the last LEC cluster to finish (3247 cells in the STL run, the fourth largest there, and 6230 cells in the no-detrend run) ran alone for hours while the other cores idled (measured with `ps` inside the jobs on 2026-11-08; average CPU use 2214 % and 3016 % of 6400 %). The cluster counts in the final `pipeline_results.npz` equal the step-5 counts above.
 
    Agreement with the March 2026 STL run (R backend, `output/cmip6_fig9/pipeline_results.npz`), measured locally:
 
@@ -177,3 +177,33 @@ Made without supervisor review at Widad's request. Each default can be reversed.
 4. **Speed claims.** The comparison with R speed, the 21x21 timing and the "4 hours" were removed. The paper gives the 6x6 laptop time (median 16.25 s) and the measured full-grid times.
 5. **Checkpoint claim.** The paper says a checkpoint is written after each step and after each cluster within the final step. It no longer says the runs fit batch-queue limits, because step 3 has no partial checkpoint and took about 12 h.
 6. **Abstract and conclusions.** Detrending is described as optional; both runs' counts are given.
+
+## G. Second check of 2026-11-09 (all corrections made in the commit that adds this section)
+
+Each item was measured or read in the repository on 2026-11-09. "Paper" is `softwarex_paper_v23.tex`.
+
+1. **Test count 238 → 235.** See C7. Changed in the contributions list, Level 3 heading and text (106 → 103, other 53 → 50), Table `tab:validation`, Impact and Conclusions, and the README.
+2. **"Serial vs. parallel (5)".** Only 2 of the 5 tests in `test_cmip6_performance_equivalence.py` compare serial with parallel runs. The other 3 compare a fast implementation with a reference loop. The table row and text now say both; the tolerance is 1e-10 or tighter, not "identical".
+3. **STL "14 series".** `tests/reference_data/stl/cases.csv` has 14 configurations holding 78 series; the near-zero configuration (`dry240`) holds 15 series. Text corrected.
+4. **STL row of `tab:pipeline-parity`.** The criterion is relative to max|x| but the deviation was given in absolute units (5.8e-13). Now 2.3e-14 max|x|.
+5. **Start-count numbers.** See A3. The paper now names the 21 seeds and the 30 cells and gives 6 of 10 (20 starts) and 4 of 10 (40 starts).
+6. **Vacuous test.** `test_r_parity_fixes.py::TestGammaWrappingRetry::test_gamma_wrap_triggers_at_boundary` ended in `assert ... or True`, which cannot fail. The `or True` is removed and the test passes. It still does not reach the boundary (gamma = -0.733 at that cell), so it does not exercise the wrap; the other gamma test does. Writing a case that hits the bound is open.
+7. **Benchmark command.** `scripts/run_fig9_benchmark.py` with default arguments crashes in plotting on the coarse 6x6 grid (cartopy 0.25.0, shapely 2.1.2: `'GeometryCollection' object is not subscriptable` in cartopy's antimeridian wrap of a 60-degree cell centred on 180°). The global T63 maps plot without error with the same libraries (checked with `scripts/plot_fig9_comparison.py`). The paper's timings are without plotting, so the paper now gives the command with `--skip-plots` and the caption says "without plotting". Fixing the plot for coarse grids is open.
+8. **Level 1 composition.** Of the 116 tests, 90 read stored R output. The other 26 (22 in `test_r_parity_fixes.py`, 4 madogram-tie tests) check translation details and tie handling against formulas or a transcription of the R loop. The paper text describes them that way; the table row label "Individual functions" covers both.
+9. **Level 2 composition.** 10 of the 16 tests compare with stored R output on the synthetic data. 3 compare the pipeline's EDC functions with the function-level implementation, 1 checks pipeline vs. entry point, 1 checks the configuration, and 1 checks that the detrending is closer to STL than to a running mean. The table footnotes say so. In one of these tests R's k_saunders (12) on the 10x10 field is loaded but not asserted; Python gives 13 because of tie order.
+10. **Synthetic, not AWI.** The Level 2 data are generated by `tests/generate_cmip6_mini_reference.R` (seasonal sine, weak trend, Gaussian noise, seed 42), not a subset of AWI-ESM-1-1-LR. Paper and README now say synthetic.
+11. **Peak memory units.** `time -v` reports KiB: 38,178,196 and 39,809,608 KiB = 36.4 and 38.0 GiB, as the paper says. An earlier note in E4 wrote "38.2 GB / 39.8 GB"; corrected.
+12. **Cover letter.** "seven-stage" → "six-stage"; trend removal marked optional; tolerance sentence matches the paper; "In an earlier study with J. Contzen, two of us …" makes the co-authorship of Contzen et al. (2025) explicit; a "not under consideration elsewhere" sentence was added. An AUTHOR CHECK comment asks you to confirm the word limit and section structure before claiming compliance.
+13. **README.** HPC section now describes the pure-Python runs (jobs 48932578, 48932579; 64 CPUs, 240 GiB, 48 h) instead of the March R-backend run; TODO markers removed; EDC bullet states the exact threshold and k check.
+14. **SLURM and docstrings.** `hpc/run_fig9_pyonly.slurm` header now matches the runs (64 CPUs, 240G, 48 h, qos 48h). `scripts/reproduce_fig9.py` example uses 64 workers. The `weatherisk cmip6` docstring gives both runs' counts.
+15. **References.** Saunders et al. (2021) corrected to Extremes 24(2), 215–240, with A.G. Stephenson. Opitz (2013) added for the extremal-t model. Bauer et al. (2021), Nat. Clim. Change 11, 80–83, added for Destination Earth.
+16. **Test tolerance tightening.** In `tests/test_r_cross_validation.py`, 18 `assert_allclose` calls had only `atol`, so numpy's default `rtol=1e-7` also applied. `rtol=0` was added so the stated absolute tolerances are the ones enforced; all 29 tests pass.
+
+Open items for you (not changed):
+
+- **Word count and structure.** The paper is about 6,000 words. The Elsevier SoftwareX page mentions a 3,000-word limit; the Guide for Authors was not read. The top-level "Model validation" section is not one of the five required sections. Decide whether to shorten and move validation under Software description or Impact.
+- **CRediT and AI-use statements.** SoftwareX normally asks for a CRediT author statement and a declaration on generative AI use. Neither is in the paper.
+- **CMIP6 data citation.** The AWI-ESM-1-1-LR historical data (ESGF) should be cited with its dataset DOI and the CMIP6 acknowledgement text.
+- **Example 1 (stripes, Fig. 2).** RELEASE BLOCKER: rerun job 48947462 on albedo; the k values, figure and description in the paper date from a run before R was removed.
+- **Version and DOI.** RELEASE BLOCKER: v0.2.0 tag and Zenodo DOI.
+

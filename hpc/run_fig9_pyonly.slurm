@@ -3,13 +3,13 @@
 #SBATCH --partition=smp
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=220G
-#SBATCH --time=12:00:00
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=240G
+#SBATCH --time=48:00:00
 #SBATCH --output=/albedo/work/user/wikchi001/weatherisk_pyonly/logs/fig9_pyonly_%j.out
 #SBATCH --error=/albedo/work/user/wikchi001/weatherisk_pyonly/logs/fig9_pyonly_%j.err
 #SBATCH --account=paleodyn.paleodyn
-#SBATCH --qos=12h
+#SBATCH --qos=48h
 
 set -euo pipefail
 

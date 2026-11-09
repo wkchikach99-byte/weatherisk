@@ -296,23 +296,22 @@ The pairwise-comparison stage grows **quadratically** in cell count: moving from
 ~10⁴. GPU acceleration, sparse graph-based strategies, or approximate nearest-
 neighbour methods will be required for next-generation Earth system simulations.
 
-### SLURM configuration (production run, job 42260990)
+### SLURM configuration (pure-Python runs, November 2026)
 
-Job 42260990 ran before the R runtime was removed from the package. Its environment loaded R 4.2.2. A rerun with the pure-Python package is pending.
-<!-- TODO(U6): replace with the pure-Python rerun (job id, run time, memory, k values) -->
+The Figure 9 runs reported in the SoftwareX paper used `hpc/run_fig9_pyonly.slurm`, which refuses to start if `Rscript` is on the search path.
 
 | Parameter | Value |
 |---|---|
 | Partition | `smp` (shared memory) |
 | Nodes / tasks | 1 / 1 |
-| CPUs per task | 16 |
-| Memory limit | 220 GiB |
-| Wall-time limit | 48 h |
-| Python / R | 3.11.7 / 4.2.2 |
+| CPUs per task | 64 |
+| Memory limit | 240 GiB |
+| Wall-time limit | 48 h (`--qos=48h`) |
+| Python | 3.11.7 |
 | Thread control | `OMP/MKL/OPENBLAS_NUM_THREADS=1` |
 
 Thread libraries are forced to single-threaded mode to prevent over-subscription
-when 16 worker processes are active simultaneously.
+when 64 worker processes are active simultaneously.
 
 ### Running on albedo
 
@@ -320,28 +319,34 @@ when 16 worker processes are active simultaneously.
 # Environment setup (run once)
 bash hpc/setup_albedo.sh
 
-# Submit the full Figure 9 pipeline
-sbatch hpc/run_fig9_clean.slurm
+# Submit the full Figure 9 pipeline (STL detrending)
+sbatch hpc/run_fig9_pyonly.slurm
+
+# Without detrending
+FIG9_EXTRA_ARGS=--no-detrend sbatch hpc/run_fig9_pyonly.slurm
 
 # Check job status
 squeue -u $USER
 
-# Resume after an interruption: rerun the same command.
-# The pipeline loads the checkpoints in output/cmip6_fig9/checkpoints/.
-weatherisk cmip6 --workers 16
+# Resume after an interruption: resubmit with the same output directory.
+# The pipeline loads the checkpoints written there.
+FIG9_OUTPUT_DIR=/path/to/previous/output sbatch hpc/run_fig9_pyonly.slurm
 ```
 
-Each run is tagged with a unique SLURM job ID; all output files are written to
-`output/cmip6_fig9/` and can be traced back to a specific job submission via
-checkpoint files in `output/cmip6_fig9/checkpoints/`.
+### Results of jobs 48932578 and 48932579
 
-### Result of job 42260990
+Both runs covered the T63 grid (18,432 cells) and 156 years on 64 cores and resumed from a checkpoint written after stage 1.
 
-<!-- TODO(U6): pure-Python rerun -->
-- Grid: T63 (18,432 cells), 156 years, completed in ≈4 hours on 16 cores
-- Peak memory: < 2 GiB (well within the 220 GiB allocation)
-- Cluster counts: k_LEC = 21, k_EDC = 142
-- Multi-node execution is left for future work
+| | STL detrending (48932578) | No detrending (48932579) | Contzen et al. (2025) |
+|---|---|---|---|
+| Wall time (`sacct`) | 36:02:48 | 25:58:03 | |
+| Job MaxRSS (`sacct`) | 95 GiB | 85 GiB | |
+| Largest single process (`time -v`) | 36.4 GiB | 38.0 GiB | |
+| k_LEC | 14 | 23 | 24 |
+| k_EDC | 142 | 104 | 104 |
+
+The job MaxRSS sums resident memory over all processes and counts shared pages more than once.
+Stage 6 runs one worker per cluster, so the last large clusters run alone while the other cores idle.
 
 ---
 
@@ -355,13 +360,12 @@ python -m pytest tests/ -v
 python -m pytest tests/ --cov=weatherisk --cov-report=term-missing
 ```
 
-<!-- TODO(U4): add test counts per file from the final test inventory -->
-None of the tests calls R. The R comparisons read frozen outputs in `tests/reference_data/`, which the reference R implementation produced once. Each stage is held to a criterion that an independent implementation can meet:
+The suite has 235 tests: 116 test individual functions against R, 16 compare the stages of the climate pipeline with R on synthetic data, and 103 test structure and behaviour. None of the tests calls R. The R comparisons read frozen outputs in `tests/reference_data/`, which were generated once with the R functions of Contzen et al., R's `stl()` and the scripts in `tests/`. `python -m pytest tests/` runs all 235 tests, including one slow end-to-end run; continuous integration runs `pytest -m "not slow"`. Each stage is held to a criterion that an independent implementation can meet:
 
-- **Deterministic functions** (covariance, extremal-coefficient conversions, pairwise likelihood summands, madogram, ellipse-overlap distance, LEC merge heights) must match the R outputs to near machine precision on identical inputs. See `tests/parity/` and `tests/test_r_cross_validation.py`.
-- **Local optimiser.** At every cell of the mini AWI-ESM-1-1-LR subset (5×5 grid, 20 years), the summed pairwise negative log-likelihood at the Python optimum may exceed its value at R's optimum by at most 0.03. Parameter values are not compared. With 20 annual maxima per cell the likelihood is nearly flat in `b` and γ where `a` is at its lower bound, so very different parameters reach the same likelihood. See `tests/test_cmip6_rparity.py`.
+- **Deterministic functions** (covariance, extremal-coefficient conversions, pairwise likelihood summands, madogram, ellipse-overlap distance, LEC merge heights) must match the R outputs on identical inputs to absolute tolerances between 1e-14 and 1e-10, depending on the function (the largest difference observed is 1.4e-14). See `tests/parity/` and `tests/test_r_cross_validation.py`.
+- **Local optimiser.** At every cell of the synthetic monthly precipitation generated by `tests/generate_cmip6_mini_reference.R` (5×5 grid, 20 years), the summed pairwise negative log-likelihood at the Python optimum may exceed its value at R's optimum by at most 0.03. Parameter values are not compared. With 20 annual maxima per cell the likelihood is nearly flat in `b` and γ where `a` is at its lower bound, so very different parameters reach the same likelihood. See `tests/test_cmip6_rparity.py`.
 - **LEC clustering** receives R's smoothed local estimates and must reproduce R's quantile threshold and cluster count *k* exactly.
-- **EDC (Saunders) clustering** may differ from R's `hclust` only in how ties between equal distances are broken.
+- **EDC (Saunders) clustering.** SciPy and R's `hclust` break ties between equal distances in a different order, so later merge heights may differ. Each dendrogram must be a valid average-linkage run on the same distance matrix, and the quantile threshold and cluster count must equal R's exactly.
 - **Structural tests** cover simulation properties, checkpoint-and-resume, serial and parallel equivalence, and parameter presets.
 
 To regenerate the fixtures, run `tests/generate_r_reference.R` and `tests/generate_cmip6_mini_reference.R`. This step needs R ≥ 4.0 with the `lhs` package. Running the tests does not.

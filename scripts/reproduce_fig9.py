@@ -12,8 +12,8 @@ Usage:
     # Quick test (downloads data if needed, serial):
     python scripts/reproduce_fig9.py
 
-    # Full run with 16 parallel workers:
-    python scripts/reproduce_fig9.py --workers 16
+    # Full run with 64 parallel workers (about 26-36 h on albedo, see hpc/run_fig9_pyonly.slurm):
+    python scripts/reproduce_fig9.py --workers 64
 
     # Use pre-existing data directory:
     python scripts/reproduce_fig9.py --data-dir /pool/data/.../pr/gn/

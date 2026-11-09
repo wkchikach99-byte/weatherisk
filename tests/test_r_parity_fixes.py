@@ -195,7 +195,7 @@ class TestGammaWrappingRetry:
         )
         # If gamma-wrapping works, result[2] should not be exactly at the boundary
         # (within numerical precision)
-        assert abs(abs(result[2]) - np.pi / 2) > 1e-12 or True  # soft check
+        assert abs(abs(result[2]) - np.pi / 2) > 1e-12
 
     def test_gamma_wrap_global(self):
         """Global optimizer should also handle gamma wrapping."""
