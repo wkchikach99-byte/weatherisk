@@ -85,7 +85,6 @@ python3 -c "
 import numpy; print(f'  numpy     {numpy.__version__}')
 import scipy; print(f'  scipy     {scipy.__version__}')
 import xarray; print(f'  xarray    {xarray.__version__}')
-import statsmodels; print(f'  statsmodels {statsmodels.__version__}')
 import weatherisk; print(f'  weatherisk  OK')
 " && echo "  ✅ All imports OK" || echo "  ⚠️ Some imports failed"
 

@@ -34,7 +34,7 @@ fi
 echo "start $(date -u +%FT%TZ) node $(hostname) job ${SLURM_JOB_ID}"
 echo "extra args: ${FIG9_EXTRA_ARGS:-none}"
 echo "git $(cat "${BASE}/src/GIT_COMMIT" 2>/dev/null || echo unknown)"
-python -c "import weatherisk, numpy, scipy, statsmodels; print('weatherisk', weatherisk.__version__, 'numpy', numpy.__version__, 'scipy', scipy.__version__)"
+python -c "import weatherisk, numpy, scipy; print('weatherisk', weatherisk.__version__, 'numpy', numpy.__version__, 'scipy', scipy.__version__)"
 
 /usr/bin/time -v python scripts/reproduce_fig9.py \
     --data-dir "${DATA_DIR}" \

@@ -45,7 +45,7 @@ import importlib
 import os
 import sys
 
-mods = ["weatherisk", "numpy", "scipy", "pandas", "statsmodels", "xarray", "netCDF4"]
+mods = ["weatherisk", "numpy", "scipy", "pandas", "xarray", "netCDF4"]
 for name in mods:
     module = importlib.import_module(name)
     print(f"import ok: {name} -> {getattr(module, '__file__', '<built-in>')}")
