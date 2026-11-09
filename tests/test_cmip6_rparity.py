@@ -565,17 +565,7 @@ class TestMiniCMIP6Pipeline:
         assert len(years) == r_am.shape[0]
 
         py_am_flat = py_am.reshape(py_am.shape[0], -1, order="F")
-        abs_diff = np.abs(py_am_flat - r_am)
-        max_diff = float(abs_diff.max())
-        mean_diff = float(abs_diff.mean())
-
-        assert max_diff < 0.09, (
-            f"Annual maxima differ too much from R mini reference. max abs diff={max_diff:.6f}."
-        )
-        assert mean_diff < 0.01, (
-            f"Annual maxima differ too much from R mini reference on average. "
-            f"mean abs diff={mean_diff:.6f}."
-        )
+        np.testing.assert_allclose(py_am_flat, r_am, rtol=1e-12, atol=0)
 
     def test_edc_madogram_matches_r(self):
         """EDC madogram from pipeline functions must match R's madogram."""

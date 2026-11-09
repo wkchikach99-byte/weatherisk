@@ -243,7 +243,7 @@ class TestPairwiseDensity:
                 row["df"], row["alpha"], row["a"], row["b"], row["g"],
             )
             np.testing.assert_allclose(
-                py_val, row["density_value"], atol=1e-8, rtol=1e-8,
+                py_val, row["density_value"], atol=1e-12, rtol=1e-12,
                 err_msg=(f"summand(z1={row['z1']},z2={row['z2']},"
                          f"x={row['x']},y={row['y']},"
                          f"a={row['a']},b={row['b']},g={row['g']})")
@@ -425,7 +425,7 @@ class TestEllipseDissimilarity:
             for r_j in range(n):
                 ref_reindexed[mapping[r_i], mapping[r_j]] = ref_dist[r_i, r_j]
 
-        np.testing.assert_allclose(py_dist, ref_reindexed, atol=0.5,
+        np.testing.assert_allclose(py_dist, ref_reindexed, atol=1e-12,
                                    err_msg="Ellipse dissimilarity matrix mismatch")
 
 
@@ -472,9 +472,9 @@ class TestSmoothing:
             expected[py_idx, 2] = ref_smooth.iloc[r_idx]["g_sm"]
 
         # a and b should match closely (simple arithmetic mean)
-        np.testing.assert_allclose(py_smooth[:, 0], expected[:, 0], atol=1e-8,
+        np.testing.assert_allclose(py_smooth[:, 0], expected[:, 0], atol=1e-12,
                                    err_msg="Smoothed 'a' mismatch")
-        np.testing.assert_allclose(py_smooth[:, 1], expected[:, 1], atol=1e-8,
+        np.testing.assert_allclose(py_smooth[:, 1], expected[:, 1], atol=1e-12,
                                    err_msg="Smoothed 'b' mismatch")
 
     def test_smoothing_gamma(self):
@@ -502,8 +502,7 @@ class TestSmoothing:
             py_idx = mapping[r_idx]
             expected_g[py_idx] = ref_smooth.iloc[r_idx]["g_sm"]
 
-        # Gamma uses circular averaging, allow slightly more tolerance
-        np.testing.assert_allclose(py_smooth[:, 2], expected_g, atol=1e-6,
+        np.testing.assert_allclose(py_smooth[:, 2], expected_g, atol=1e-12,
                                    err_msg="Smoothed 'gamma' mismatch")
 
 
@@ -547,7 +546,7 @@ class TestClustering:
         py_heights = np.sort(hc[:, 2])
         r_heights = np.sort(ref_hc["height"].values)
 
-        np.testing.assert_allclose(py_heights, r_heights, atol=1e-6,
+        np.testing.assert_allclose(py_heights, r_heights, atol=1e-12,
                                    err_msg="LEC merge heights mismatch")
 
     def test_saunders_cluster_count(self):
@@ -725,7 +724,7 @@ class TestLogLikelihoodInClusters:
             )
 
             np.testing.assert_allclose(
-                py_llh, row["llh"], atol=1e-4, rtol=1e-4,
+                py_llh, row["llh"], atol=1e-12, rtol=1e-12,
                 err_msg=f"LLH cluster {cl}: Python={py_llh}, R={row['llh']}"
             )
 
