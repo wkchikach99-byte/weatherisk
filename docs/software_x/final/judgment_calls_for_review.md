@@ -207,3 +207,31 @@ Open items for you (not changed):
 - **Example 1 (stripes, Fig. 2).** RELEASE BLOCKER: rerun job 48947462 on albedo; the k values, figure and description in the paper date from a run before R was removed.
 - **Version and DOI.** RELEASE BLOCKER: v0.2.0 tag and Zenodo DOI.
 
+
+## H. Example 1 rerun and the status of the R code (2026-11-11)
+
+1. **Example 1 is now the pure-Python run.** Albedo job 48947462 ran `scripts/reproduce_fig3.py --seed 42 --workers 32` on the `paper_stripes` preset. Wall time 8:24:36; largest process 11.6 GiB. It gives k_edc = 7 and k_lec = 5, the same counts as the old figure. The EDC partition is identical to the old one; the LEC partition differs in detail but has the same form.
+2. **Measured on the run's saved arrays** (`labels_*.npy`, `inclusters_*.npy`, `b_matrix.npy`). Assigning each cell its cluster's estimate of b gives a mean absolute error of 0.373 (LEC) and 0.858 (EDC) over the 2601 cells. LEC in-cluster b, left to right: 0.37, 1.68, 3.42, 4.60, plus a 28-cell cluster in the upper-right corner with b = 5.07. EDC in-cluster b ranges from 0.31 to 3.73. 24 of 51 grid columns lie in a single LEC cluster; none lie in a single EDC cluster.
+3. **Figure.** `figures/fig3_stripes.png` is replotted from those arrays with `plot_cluster_comparison`, without the "Fig. 3 —" title. The old `fig3_regenerated.png` is kept in the repository but no longer used by the paper.
+4. **Text.** The paragraph now gives these numbers instead of qualitative claims. It also states that Contzen et al. obtain six clusters with both methods on their data, and that the counts need not agree because the replicates come from a different random number generator. Their Figure 3 discussion (EDC clusters span a wide x-range, LEC clusters resemble vertical stripes, small LEC clusters at the edge of the map) matches what we see, and the paper says so.
+5. **The R code is not published by Contzen.** Contzen et al. (2025, Extremes 28:713–737) have only a data availability statement (for the Section 5 data, Danek et al. 2020) and no code availability statement. The arXiv preprint 2306.07780 has no code link. Zenodo has one Contzen software record, the R code for a different paper ("Long-term temporal evolution of extreme temperature in a warming Earth", 10.5281/zenodo.7413932, 2022). The Acknowledgements claim that he made the code "publicly available" is therefore removed. The sentence now reads "We thank J. Contzen for the original R implementation of the methods, on which weatherisk is based." The unverified "helpful discussions" was dropped; add it back if it is true.
+6. **But `r_code/` is public through our repository.** The public `main` branch of github.com/wkchikach99-byte/weatherisk has contained `r_code/` (34 files) since the initial commit of 2026-03-09. The paper links to `r_code/functions.R#L515`. The repository's MIT licence names only Kchikach, Dickhaus and Lohmann as copyright holders, and `r_code/` has no licence of its own. `r_code/main.pdf` is the author manuscript of Contzen et al. Decision for you: get J. Contzen's written agreement to redistribute `r_code/` and say under which licence (for example a `r_code/LICENSE` or README line naming him as author), or remove it from the public tree and cite the R behaviour without a link. The published article is open access under CC BY 4.0, so redistributing the article is allowed with attribution, but `main.pdf` is a pre-publication manuscript and is not needed in a software repository; consider removing it. Nothing in the repository was changed.
+7. **SoftwareX rules, from the official template (Version 6, March 2026).** The Guide for Authors page on ScienceDirect returns 403 to automated access, so it was not read. The DOCX and TEX templates at legacyfileshare.elsevier.com/promis_misc/softwarex-osp-template.{docx,tex} were read. They say:
+   - "Our word limit is 4,000 words", and at most six pages "excluding metadata, tables, figures, references", with priority on the word limit. Exceptions "should be discussed with the Managing Editor or publisher prior to submission."
+   - The five sections (Motivation and significance; Software description; Illustrative examples; Impact; Conclusions) are mandatory, and a paper without them "will be returned or rejected". Extra sections are neither allowed nor forbidden; "Any submission that deviates widely will likely face desk rejection." The words testing and validation do not appear in the template.
+   - Abstract "ca. 100 words"; at most six keywords; at most six figures; Code metadata table C1 to C8 mandatory; a GitHub repository with README.md and "a Licence.txt file" is mandatory.
+8. **Measured against those rules** (word count of the LaTeX source with figures, tables, listings, math and commands removed):
+
+   | Part | Words |
+   |---|---|
+   | Abstract | 217 |
+   | 1 Motivation and significance | 876 |
+   | 2 Software description | 1963 |
+   | 3 Illustrative examples | 1041 |
+   | 4 Model validation (extra section) | 959 |
+   | 5 Impact | 491 |
+   | 6 Conclusions | 589 |
+   | Main body total | 5919 |
+
+   The main body is about 1900 words over the limit and the abstract about twice the guideline. Figures (3) and keywords (5) are within the limits. Because "Model validation" is a numbered section, Impact and Conclusions are numbered 5 and 6 instead of 4 and 5. The repository has `LICENSE`, not `Licence.txt`.
+9. **Statements added.** A CRediT statement above the Acknowledgements replaces the "Author contributions" paragraph and keeps its content: Kchikach (Methodology, Software, Validation, Investigation, Visualization, Writing – original draft); Dickhaus and Lohmann (Conceptualization, Supervision, Writing – review & editing). A Data availability section cites the AWI-ESM-1-1-LR historical dataset, Danek et al. (2020), doi 10.22033/ESGF/CMIP6.9328 (checked: the DOI resolves to the DKRZ CERA record). A generative-AI declaration uses Elsevier's required wording and names Claude (Anthropic) for code and text editing; an AUTHOR CHECK asks you to confirm the tools and purposes. Funding and Competing Interests were already present.

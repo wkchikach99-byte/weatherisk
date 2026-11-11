@@ -704,8 +704,8 @@ these stripes from the simulated data alone.
   label=lst:validate]
 from weatherisk.pipeline import run_nonstationary_pipeline
 
-# Preset "paper_stripes": 51x51 grid on [-5,5]^2, 250 replicates,
-# true a = 2, gamma = 0, b(x, y) = (x + 5)/2
+# Preset "paper_stripes": 51x51 grid on [-5,5]^2,
+# 250 replicates, true a = 2, gamma = 0, b(x, y) = (x + 5)/2
 result = run_nonstationary_pipeline(
     "paper_stripes", seed=42, n_workers=8,
 )
@@ -715,40 +715,46 @@ print(result["k_edc"], result["k_lec"])
 \noindent Listing~\ref{lst:app-validate} in~\ref{app:code} runs the same
 steps one function at a time.
 
-Figure~\ref{fig:stripes} shows the result.  Panel~(a) displays the
-EDC clusters ($k_{\text{edc}} = 7$), panel~(b) the LEC clusters % RELEASE BLOCKER: k values, figure and description date from a run before R was removed; replace with albedo job 48947462 (pure Python, seed 42)
-($k_{\text{lec}} = 5$), and panel~(c) the true parameter field.
-The true axis difference~$b$ increases smoothly from left to right
-(panel~c), producing a continuous gradient from dark blue ($b
-\approx 0$) on the left to light shading ($b \approx 5$) on the
-right.  The EDC method (panel~a) uses seven clusters and captures
-the overall left-to-right trend, but its boundaries are irregular:
-some clusters extend horizontally across the domain, and the
-transitions between adjacent regions do not follow the vertical
-orientation of the true gradient.  The LEC method (panel~b), by
-contrast, uses only five clusters yet produces boundaries that are
-predominantly vertical, closely tracking the true transitions in
-the parameter field.  The estimated within-cluster~$b$ values in
-the LEC map also progress monotonically from dark to light,
-mirroring the ground truth more faithfully than the EDC partition.
-This controlled experiment illustrates that the Python
-implementation recovers the known spatial structure,
-consistent with the methodology of Contzen et al.~\cite{contzen2025}.
+Figure~\ref{fig:stripes} shows the result of this call run with
+\texttt{n\_workers=32}, which took 8.4~hours of wall time.
+Panel~(a) displays the EDC clusters ($k_{\text{edc}} = 7$),
+panel~(b) the LEC clusters ($k_{\text{lec}} = 5$), and panel~(c)
+the true field $b = (x+5)/2$, which rises from 0 on the left to 5
+on the right. The in-cluster estimates of~$b$ of the seven EDC
+clusters range from 0.31 to 3.73 and follow the left-to-right
+trend, but several EDC boundaries run horizontally across the
+domain, and no column of the grid lies within a single EDC cluster.
+Four of the five LEC clusters are vertical bands, with in-cluster
+estimates $b = 0.37$, 1.68, 3.42 and 4.60 from left to right; the
+fifth is a cluster of 28~cells in the upper-right corner
+($b = 5.07$). Of the 51~grid columns, 24 lie entirely within one
+LEC cluster. If each cell is assigned the estimate of its cluster,
+the mean absolute error with respect to the true~$b$ over the
+2601~cells is 0.37 for LEC and 0.86 for EDC.
+Contzen et al.~\cite{contzen2025} report the same contrast for this
+design (their Figure~3): EDC clusters span a wide range of
+$x$-coordinates, LEC clusters resemble vertical stripes, and LEC
+leaves small clusters at the edge of the map, where fewer
+neighbouring cells enter the local estimates. They obtain six
+clusters with both methods. The counts need not agree, because
+the Python package draws the 250 replicates with its own random
+number generator, so the simulated data differ from theirs.
+This controlled experiment shows that the Python
+implementation recovers the known spatial structure.
 Section~\ref{sec:validation} describes how each stage is compared
 with the original R code.
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.95\textwidth]{figures/fig3_regenerated.png} % RELEASE BLOCKER: see Example 1 text
+\includegraphics[width=0.95\textwidth]{figures/fig3_stripes.png}
 \caption{Synthetic validation on the ``stripes'' preset
-  ($k_{\text{edc}} = 7$, $k_{\text{lec}} = 5$). % RELEASE BLOCKER: see Example 1 text
-  (a)~EDC clusters coloured by the estimated axis difference~$b$;
-  (b)~LEC clusters coloured by estimated~$b$;
-  (c)~true parameter field showing a smooth left-to-right
-  gradient in~$b$ from 0 to~5.
-  The LEC method recovers sharper, vertically aligned boundaries
-  that closely match the ground truth, while the EDC method
-  produces more irregular, horizontally extended partitions.}
+  (seed~42, $k_{\text{edc}} = 7$, $k_{\text{lec}} = 5$).
+  (a)~EDC clusters coloured by their estimated axis difference~$b$;
+  (b)~LEC clusters coloured by their estimated~$b$;
+  (c)~true field $b = (x+5)/2$, rising from 0 to~5.
+  The LEC boundaries are mostly vertical, as in the true field,
+  apart from a 28-cell cluster in the upper-right corner; several
+  EDC boundaries run horizontally.}
 \label{fig:stripes}
 \end{figure}
 
@@ -1255,23 +1261,23 @@ detecting structural regime shifts.}
 \revg{\texttt{weatherisk} is available under the MIT licence.}
 
 %% ============================================================
+\section*{CRediT authorship contribution statement}
+%% ============================================================
+\textbf{Widad Kchikach:} Methodology, Software, Validation,
+Investigation, Visualization, Writing -- original draft.
+\textbf{Thorsten Dickhaus:} Conceptualization, Supervision,
+Writing -- review \& editing.
+\textbf{Gerrit Lohmann:} Conceptualization, Supervision,
+Writing -- review \& editing.
+
+%% ============================================================
 \section*{Acknowledgements}
 %% ============================================================
-% AUTHOR CHECK: r_code/ is J. Contzen's simulation-study code; confirm that it is public before keeping "publicly available", and confirm the "helpful discussions".
-
 The authors thank the Alfred Wegener Institute Helmholtz Centre for
 Polar and Marine Research (AWI) for access to the \emph{albedo}
 computing cluster, on which the Figure~9 case-study pipeline was
-executed. We thank J.~Contzen for making the original R
-implementation publicly available and for helpful discussions during
-the development of \texttt{weatherisk}.
-
-\paragraph*{Author contributions}
-W.~Kchikach designed and implemented the software, conducted all
-numerical experiments, and wrote the first draft of the manuscript.
-T.~Dickhaus and G.~Lohmann supervised the work, contributed to the
-scientific conception, and revised the manuscript. All authors read
-and approved the final version.
+executed. We thank J.~Contzen for the original R implementation of
+the methods, on which \texttt{weatherisk} is based.
 
 \paragraph*{Funding}
 W.~Kchikach is supported by the MarDATA Helmholtz School for Marine
@@ -1285,6 +1291,25 @@ support from the ERC Synergy Grant ``i2B'' (grant no.\ 101118519).
 \revn{The authors declare that they have no known competing financial
 interests or personal relationships that could have appeared to
 influence the work reported in this paper.}
+
+%% ============================================================
+\section*{Data availability}
+%% ============================================================
+The AWI-ESM-1-1-LR historical simulation used in
+Section~\ref{sec:ex-fig9} is publicly available from the Earth
+System Grid Federation~\cite{danek2020}. The synthetic data of
+Section~\ref{sec:ex-synthetic} are generated by the package from the
+seed given there.
+
+%% ============================================================
+\section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}
+%% ============================================================
+% AUTHOR CHECK: state the tools you used and what for; the wording after the first sentence is Elsevier's required text.
+During the preparation of this work the authors used Claude
+(Anthropic) in order to assist with writing and testing code and
+with editing the manuscript text. After using this tool, the
+authors reviewed and edited the content as needed and take full
+responsibility for the content of the published article.
 
 %% ============================================================
 %% APPENDIX
@@ -1467,6 +1492,13 @@ Infrastructure in HPC,
 P.~Bauer, B.~Stevens, W.~Hazeleger,
 A digital twin of Earth for the green transition,
 Nat.\ Clim.\ Change 11\,(2) (2021) 80--83.
+
+\bibitem{danek2020}
+C.~Danek, X.~Shi, C.~Stepanek, H.~Yang, D.~Barbi, J.~Hegewald,
+G.~Lohmann,
+AWI AWI-ESM1.1LR model output prepared for CMIP6 CMIP historical,
+version 20200212, Earth System Grid Federation (2020),
+\url{https://doi.org/10.22033/ESGF/CMIP6.9328}.
 
 \end{thebibliography}
 
