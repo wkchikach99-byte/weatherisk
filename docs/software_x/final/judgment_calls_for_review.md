@@ -235,3 +235,25 @@ Open items for you (not changed):
 
    The main body is about 1900 words over the limit and the abstract about twice the guideline. Figures (3) and keywords (5) are within the limits. Because "Model validation" is a numbered section, Impact and Conclusions are numbered 5 and 6 instead of 4 and 5. The repository has `LICENSE`, not `Licence.txt`.
 9. **Statements added.** A CRediT statement above the Acknowledgements replaces the "Author contributions" paragraph and keeps its content: Kchikach (Methodology, Software, Validation, Investigation, Visualization, Writing – original draft); Dickhaus and Lohmann (Conceptualization, Supervision, Writing – review & editing). A Data availability section cites the AWI-ESM-1-1-LR historical dataset, Danek et al. (2020), doi 10.22033/ESGF/CMIP6.9328 (checked: the DOI resolves to the DKRZ CERA record). A generative-AI declaration uses Elsevier's required wording and names Claude (Anthropic) for code and text editing; an AUTHOR CHECK asks you to confirm the tools and purposes. Funding and Competing Interests were already present.
+
+## I. Length rule: Guide for Authors versus template (2026-11-12)
+
+1. **The current Guide for Authors could not be read.** sciencedirect.com/journal/softwarex/publish/guide-for-authors returns HTTP 403 to both the automated fetcher and the in-app browser (an Elsevier bot check). The Wayback Machine holds no successful capture of that URL. The latest successful capture of the old URL (elsevier.com/journals/softwarex/2352-7110/guide-for-authors) is from 26 October 2022.
+2. **The 2022 guide says:** "Maximum word count: 3000 excluding: title, authors, affiliations, references, metadata tables and including: abstract, running text, captions, footnotes. Maximum six (6) figures." It also says "We will only consider software articles that are submitted using SoftwareX's template" and asks authors to "strictly adhere to the Template for Original Software Publications."
+3. **The current template (copyright 2026) says:** "Our word limit is 4,000 words." and "Maximum 6 pages in total (excluding metadata, tables, figures, references) with a 4000-word limit (we ask that more priority is placed on the word limit versus the page count)." It adds "in exceptional circumstances, we can be flexible with the page numbers and word limit." The abstract is "Ca. 100 words".
+4. **Reading.** The template is newer than the 2022 guide, and the guide defers to the template, so 4,000 words is most likely the current limit. A web search snippet of an Elsevier journal page still says 3,000; that page now returns 404, so its date is unknown. Whether the 4,000 words include the abstract and captions is not stated in the template; the 2022 guide counted both.
+5. **v23 measured both ways** (LaTeX source; tables, listings and display math removed; inline math and citations count as one word each; script in the session scratchpad, wc/count.py):
+
+   | Part | Running text | Captions |
+   |---|---|---|
+   | Abstract | 215 | |
+   | 1 Motivation and significance | 874 | |
+   | 2 Software description | 2092 | 190 |
+   | 3 Illustrative examples | 1059 | 246 |
+   | 4 Model validation | 970 | 172 |
+   | 5 Impact | 494 | |
+   | 6 Conclusions | 588 | |
+   | Total | 6292 | 608 |
+
+   Sections 1 to 6 without abstract and captions are 6077 words. The §H count (5919) used a stricter filter for inline code; the difference does not change the conclusion. Against the 2026 template (4,000) the paper is about 2,000 words over. Against the 2022 rule (3,000 including abstract and captions, total 6,900) it is about 3,900 over.
+6. **Safe target.** A version of at most 4,000 words including abstract and captions satisfies the template under either reading. Confirming the exact rule needs the current guide, opened by a person in a logged-in browser, or a question to the editorial office.
