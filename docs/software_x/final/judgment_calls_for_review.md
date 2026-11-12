@@ -258,3 +258,36 @@ Open items for you (not changed):
    Sections 1 to 6 without abstract and captions are 6077 words. The §H count (5919) used a stricter filter for inline code; the difference does not change the conclusion. Against the 2026 template (4,000) the paper is about 2,000 words over. Against the 2022 rule (3,000 including abstract and captions, total 6,900) it is about 3,900 over.
 6. **Safe target.** A version of at most 4,000 words including abstract and captions satisfies the template under either reading. Confirming the exact rule needs the current guide, opened by a person in a logged-in browser, or a question to the editorial office.
 7. **SciSpace "Softwarex Template 2026" page (checked 2026-11-12) is not a usable source.** It gives no word limit for the paper. Its text ("Keep the abstract within about 250 words", Highlights and graphical abstract "expected") is the same boilerplate SciSpace shows for Ultrasonics, Wear and other Elsevier journals, and it contradicts Elsevier's own SoftwareX template ("Ca. 100 words"). Elsevier's 2022 SoftwareX guide says Highlights are "optional yet highly encouraged" (3 to 5 bullets, at most 85 characters each, separate file) and the graphical abstract is optional. v23 has neither; a Highlights file is cheap and optional.
+
+## J. Current Guide for Authors, PDF supplied by Widad (2026-11-12)
+
+The PDF is a print of sciencedirect.com/journal/softwarex/publish/guide-for-authors dated 11/12/26. It is the current guide and replaces the inferences of §I items 1 to 6.
+
+1. **Length rule, confirmed.** The guide says "A short descriptive paper of 4000-word limit" and, under Original software publication, "Maximum word count: 4000 excluding: title, authors, affiliations, references, metadata tables and including: abstract, running text, captions, footnotes. Maximum six (6) figures." So the abstract and captions count. §I item 4 guessed this right; the 3,000 of the 2022 guide is outdated.
+2. **v23 against the rule.** Countable words are abstract 215 + sections 1 to 6 running text 6077 + captions 608 = 6900. That is about 2,900 over (73 % above the limit). The five tables in sections 1 to 6 hold a further 310 words; the guide excludes only metadata tables, so a strict editor could count them too (7210). The end statements (CRediT, Acknowledgements, Data availability, AI declaration, about 235 words) and the Appendix A listings text are not named in the exclusion list either. A v24 needs to reach 4,000 with abstract and captions, and should leave margin for the tables.
+3. **Figures.** v23 has 3 figures (pipeline, Fig 3 stripes, 2x2 Fig 9). The limit is 6. OK.
+4. **Checklist of the other rules** (status for v23):
+
+   | Rule in the guide | v23 | Action |
+   |---|---|---|
+   | Abstract at most 250 words, not numbered | 215, unnumbered | OK; the template asks for ca. 100, cutting it helps the word budget |
+   | 1 to 7 keywords | 5 | OK |
+   | Highlights encouraged, 3 to 5 bullets of at most 85 characters, separate file | none | optional; cheap to add |
+   | Graphical abstract encouraged | none | optional |
+   | "strictly adhere to the Template for Original Software Publications" | extra numbered section 4 Model validation | fold into section 2 (Software description) or 5 (Impact) in v24 |
+   | Acknowledgements "directly before the reference list"; AI statement "in a new section before the reference list" | Acknowledgements are followed by Competing Interests, Data availability, AI declaration and Appendix A | reorder so Acknowledgements come last before the references, or ask the editor; elsarticle allows the appendix after the references |
+   | CRediT role names | "Writing -- review \& editing" | guide spells it "Writing – review and editing"; trivial wording fix |
+   | Funding in the standard form; state if sponsors had no role | names funders and grant numbers; no sponsor-role sentence | add "The funders had no role in ..." if true (author check) |
+   | Full postal address of each affiliation, with country | institution, city and country only | add street addresses (AWI: Am Handelshafen 12, 27570 Bremerhaven; University of Bremen: Bibliothekstraße 1, 28359 Bremen; author check) |
+   | References with more than 6 authors list the first 6 then "et al." | danek2020 lists 7 authors | cut to 6 + et al.; it is the only such entry |
+   | Data references tagged [dataset] | danek2020 untagged | add the tag |
+   | Cite the software itself with version and DOI | DOI still a release blocker (C3) | Widad: tag v0.2.0, Zenodo DOI |
+   | Maps: note that "map lines delineate study areas and do not necessarily depict accepted national boundaries" | Fig 9 shows coastlines only, no borders | the note costs 14 words; add it to the Fig 9 caption to be safe |
+   | American or British English, not both | prose is British; the US forms found are code (\color, align=center), an institution name (NOAA Climate Prediction Center) and a reference title | OK |
+   | Repository has README.md and LICENSE.txt | README.md and LICENSE (no .txt) | Widad's repo decision; rename or copy to LICENSE.txt |
+   | "Source code in a repo/src directory" | package at weatherisk/ in the repo root | Widad's decision; a src/ layout changes imports and packaging, so it needs its own unit and test run; the editor may accept the flat layout |
+   | Open-source licence from the OSI list | MIT for the package; r_code/ has no licence from Contzen (§H) | Widad's decision |
+   | LaTeX submission: PDF plus a .zip of .tex, figures and bibliography | not prepared | at submission |
+   | Article type "Original Software Publication" in Editorial Manager | at submission | at submission |
+
+5. **Reading.** The length overshoot is the only item likely to cause a desk rejection. The other items are small edits or repository decisions. The section structure (item "strictly adhere") is the second risk and is solved by the same v24 rewrite.
