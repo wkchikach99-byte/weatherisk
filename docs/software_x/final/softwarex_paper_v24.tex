@@ -10,6 +10,7 @@
 \usepackage{tikz}
 \usepackage{multirow}
 \usepackage{placeins}
+\usepackage{float}
 \usepackage{array}
 \usepackage{tabularx}
 \usepackage{microtype}
@@ -50,6 +51,8 @@
 }
 
 \emergencystretch=2em
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5\baselineskip plus 2pt}
 
 \journal{SoftwareX}
 
@@ -68,8 +71,9 @@
 \author[awi,uni]{Gerrit Lohmann}
 
 \address[awi]{Alfred Wegener Institute Helmholtz Centre for Polar
-  and Marine Research, Bremerhaven, Germany}
-\address[uni]{University of Bremen, Bremen, Germany}
+  and Marine Research, Am Handelshafen 12, 27570 Bremerhaven, Germany}
+\address[uni]{University of Bremen, Bibliothekstra\ss{}e 1,
+  28359 Bremen, Germany}
 
 
 \begin{abstract}
@@ -87,7 +91,8 @@ stored outputs of R code and runs without R. \revn{Revisiting a published
 case study with the} \revt{Alfred Wegener Institute (AWI)}-ESM-1-1-LR
 model, \revn{Extremal Dependence Clustering without detrending gives
 the published 104~clusters and Local Estimates Clustering 23, against
-24 published.}
+24 published.} With seasonal-trend detrending, which that study
+reports, the counts are 142 and 14.
 \end{abstract}
 
 
@@ -99,37 +104,33 @@ the published 104~clusters and Local Estimates Clustering 23, against
 \end{frontmatter}
 
 %% ============================================================
-\section*{Metadata}
+\section*{Required Metadata}
 \label{sec:metadata}
 %% ============================================================
 
-Table~\ref{tab:metadata} summarises the mandatory software metadata
-for the current release of \texttt{weatherisk}.
+\section*{Current code version}
 
-\begin{table}[!h]
+\begin{table}[H]
 \small
 \begin{tabularx}{\textwidth}{|l|>{\raggedright\arraybackslash}p{4.9cm}|>{\raggedright\arraybackslash}X|}
 \hline
-\textbf{Nr.} & \textbf{Code metadata description} & \textbf{Metadata} \\
+\textbf{Nr.} & \textbf{Code metadata description} & \textbf{Please fill in this column} \\
 \hline
 C1 & Current code version & v0.2.0 \\ % RELEASE BLOCKER: tag v0.2.0 and set __version__/pyproject to 0.2.0 before submission
 \hline
-C2 & Permanent link to code/repository &
-  \url{https://github.com/wkchikach99-byte/weatherisk} \\
+C2 & Permanent GitHub link to code/repository used for this code version &
+  \url{https://github.com/wkchikach99-byte/weatherisk/tree/v0.2.0} \\
 \hline
-C3 & Permanent link to Reproducible Capsule &
-  \revn{\url{https://doi.org/10.5281/zenodo.20108563}} \\ % RELEASE BLOCKER: replace with the Zenodo DOI of the v0.2.0 release
+C3 & Legal Code License & MIT License \\
 \hline
-C4 & Legal Code License & MIT \\
+C4 & Code versioning system used & git \\
 \hline
-C5 & Code versioning system used & git \\
+C5 & Software code languages, tools, and services used &
+  Python; SLURM (optional, for HPC runs) \\
 \hline
-C6 & Software code languages, tools, and services used &
-  Python~3.10+; SLURM (optional, for HPC runs) \\
-\hline
-C7 & Compilation requirements, operating environments
+C6 & Compilation requirements, operating environments
   \& dependencies &
-  Python~$\geq$3.10; NumPy; SciPy; pandas; matplotlib;
+  Python~$\geq$3.10 on Linux or macOS; NumPy; SciPy; pandas; matplotlib;
   Click; xarray; netCDF4; scikit-learn; Cartopy; h5py.
   Optional for development: pytest, pytest-cov, ruff, mypy, pyreadr,
   psutil, statsmodels. R is not required. The validation fixtures
@@ -138,10 +139,10 @@ C7 & Compilation requirements, operating environments
   \texttt{tests/}, and ship with the repository as frozen CSV and
   binary files. \\
 \hline
-C8 & Link to developer documentation &
-  \url{https://github.com/wkchikach99-byte/weatherisk} \\
+C7 & If available Link to developer documentation/manual &
+  \url{https://github.com/wkchikach99-byte/weatherisk\#readme} \\
 \hline
-C9 & Support email for questions & widad.kchikach@awi.de \\
+C8 & Support email for questions & widad.kchikach@awi.de \\
 \hline
 \end{tabularx}
 \caption{Code metadata (mandatory).}
@@ -205,14 +206,15 @@ estimates local anisotropy parameters via pairwise composite
 likelihood~\cite{padoan2010} \revr{(see Section~\ref{sec:architecture} for the
 technical details)}, computes a pairwise dissimilarity score between
 all grid cells based on the geometric overlap of their fitted
-anisotropy ellipses, and \revt{groups} cells by hierarchical clustering. \revt{That
-implementation} is a sequence of R scripts that are chained by shell
-scripts for a SLURM cluster\revt{. It was written to produce the
-simulation study of the methodology paper~\cite{contzen2025}, and it
-does not contain the preprocessing of climate-model output. Applying
-the method to other or larger datasets calls for an installable
-package with a documented interface and tests, and
-\texttt{weatherisk} is intended to provide one.}
+anisotropy ellipses, and \revt{groups} cells by hierarchical clustering. \revt{Up
+to now, however, the existing} implementation is fragmented across independent
+R scripts tied together by SLURM shell files\revt{. That implementation
+served its intended purpose very well: it provided the empirical
+illustration needed for the statistical methodology paper by Contzen
+et al.~\cite{contzen2025}. As the method gains wider adoption and is applied to
+larger or more varied datasets, however, a structured and installable
+package becomes necessary, and that is precisely the gap
+\texttt{weatherisk} fills.}
 
 \texttt{weatherisk} re-implements the full pipeline in a single
 Python package that can be installed with \texttt{pip install} and is
@@ -225,13 +227,13 @@ clusters.
 
 Existing Python packages do support parts of the extreme-value workflow.
 For example, \texttt{pyextremes}~\cite{pyextremes} and
-\texttt{scikit-extremes}\footnote{\url{https://github.com/kikocorreoso/scikit-extremes}}
+\texttt{scikit-extremes}~\cite{scikitextremes}
 focus on univariate extreme-value analysis, while the R package
 \texttt{SpatialExtremes}~\cite{spatialextremes} provides max-stable simulation.
 However, to our knowledge, no existing Python package offers the
 integrated spatial-extremes workflow implemented here: max-stable
 simulation, local composite-likelihood estimation, and ellipse-based
-spatial clustering of extremes in one package.
+spatial clustering of extremes.
 
 %% ============================================================
 \section{Software description}
@@ -241,8 +243,8 @@ spatial clustering of extremes in one package.
 \subsection{Software architecture}
 \label{sec:architecture}
 
-\texttt{weatherisk} is a pip-installable Python package organised
-into 22~modules and a CLI entry point.  Figure~\ref{fig:workflow}
+\texttt{weatherisk}~\cite{weatherisk} is a pip-installable Python package organised
+into 22~modules and a command-line interface (CLI).  Figure~\ref{fig:workflow}
 shows the overall workflow. The processing pipeline consists of six
 stages:
 
@@ -255,8 +257,7 @@ stages:
     et al.~\cite{cleveland1990}, in a NumPy translation of the
     Fortran routine that underlies R's \texttt{stl()} (module
     \texttt{stl}), with a 12-month period, a periodic seasonal
-    component and robust fitting. The trend component is
-    subtracted, retaining the seasonal cycle and residuals. \revt{This
+    component and robust fitting. \revt{This
     step removes the long-term trend from the series,
     leaving the seasonal cycle and interannual residuals available for
     extreme-value analysis.} The step can be
@@ -285,8 +286,8 @@ stages:
   user-specified spatially varying anisotropy are generated on a
   regular grid by the spectral construction of
   Schlather~\cite{schlather2002}, with the positive parts of
-  Gaussian spectral functions raised to the power~$\nu$ as in
-  Opitz~\cite{opitz2013}.
+  Gaussian spectral functions raised to the power~$\nu$, the degrees
+  of freedom of the extremal-$t$ model, as in Opitz~\cite{opitz2013}.
 \item \textbf{Local estimation.}
   For each grid cell, we estimate the three local anisotropy
   parameters of the extremal-$t$ dependence model of Contzen
@@ -296,7 +297,7 @@ stages:
   semi-major axis. They are estimated by
   maximising a pairwise composite likelihood~\cite{padoan2010,contzen2025}. The
   optimisation runs over all neighbouring pairs within grid-point
-  distance $\varepsilon$ (default $\varepsilon=5$).
+  distance $\varepsilon$ (default $\varepsilon=5$ in \texttt{CMIP6Config}).
   \rev{The likelihood is maximised with the bounded quasi-Newton method
   L-BFGS-B from SciPy, started from 50 Latin-hypercube points
   (seed = 42).}
@@ -304,7 +305,7 @@ stages:
   \rev{The raw estimates $(a_i, b_i, \gamma_i)$ \revt{(where
   subscript $i$ indexes the grid cell)} are smoothed by a
   moving average over grid cells within a smoothing radius (default
-  2.0 in grid-point units).}
+  2.0 grid points in \texttt{CMIP6Config}).}
 \item \textbf{Clustering.}
   From the smoothed parameter estimates, we assemble a pairwise
   dissimilarity matrix and apply average-linkage hierarchical
@@ -330,8 +331,9 @@ stages:
 \item \textbf{\rev{In-cluster re-estimation.}}
   \rev{Within each cluster, one set of dependence parameters
   $(a,b,\gamma)$ is re-estimated from the data of all the cluster's
-  grid cells by maximum pairwise composite likelihood (pairs up to
-  $4.0\,\varepsilon$ apart, three starting points per cluster).}
+  grid cells by maximum pairwise composite likelihood (in the CMIP6
+  pipeline, pairs up to $4.0\,\varepsilon$ apart and three starting
+  points per cluster).}
 \end{enumerate}
 
 \begin{figure}[ht]
@@ -384,31 +386,26 @@ stages:
 
 % Module names on the left
 \node[note, left=0.3cm of raw, text width=1.6cm, align=right]
-  {\texttt{cmip6\_pipeline}\\+ \texttt{io}};
+  {\texttt{cmip6\_data}};
 \node[note, left=0.3cm of stl, text width=1.6cm, align=right]
-  {\rev{\texttt{cmip6\_pipeline}}};
+  {\rev{\texttt{stl}}};
 \node[note, left=0.3cm of bm, text width=1.6cm, align=right]
   {\rev{\texttt{cmip6\_pipeline}}};
 \node[note, left=0.3cm of frech, text width=1.6cm, align=right]
   {\texttt{extremes}};
 \node[note, left=0.3cm of mle, text width=1.6cm, align=right]
-  {\texttt{density}\\+ \texttt{estimation}};
+  {\texttt{density}\\+ \texttt{backend}};
 \node[note, left=0.3cm of smooth, text width=1.6cm, align=right]
   {\texttt{estimation}};
 \node[note, left=0.3cm of clust, text width=1.6cm, align=right]
   {\texttt{clustering}};
 \node[note, left=0.3cm of out, text width=1.6cm, align=right]
-  {\texttt{pipeline}};
-
-% Stage labels on the right
-\node[note, right=0.2cm of stl] {Step 1a};
-\node[note, right=0.2cm of bm] {Step 1b};
-\node[note, right=0.2cm of frech] {Step 1c};
+  {\texttt{estimation}\\+ \texttt{backend}};
 
 \end{tikzpicture}
 \caption{\rev{Processing pipeline of \texttt{weatherisk}. Stage~1
   (a--c) is the preprocessing chain added for climate-model data;
-  step~1a can be switched off;
+  stage~1a can be switched off;
   stages~3--6 implement the core statistical methodology of Contzen
   et al.~\cite{contzen2025}. Module names are shown on the left.\revt{ Stage~2
   (dashed box, right): \texttt{simulation.py} generates simulated
@@ -428,27 +425,27 @@ the anisotropic, stationary or non-stationary correlation functions
 of the extremal-$t$ dependence model and converts correlations into
 extremal coefficients and back.
 
-\paragraph{Scalability and execution (\texttt{scalable}, \texttt{cli})}
+\paragraph{Scalability and execution (\texttt{cli})}
 The command-line entry point
-\texttt{weatherisk} has three sub-commands: \texttt{validate} for the
-synthetic designs, \texttt{cmip6} for the Figure~9 case study, and
-\texttt{maps} for gridded observational data of the NOAA Climate
-Prediction Center (CPC). The pipeline writes a checkpoint
-after each step, and after each cluster within the final step, so an
+\texttt{weatherisk} has three sub-commands: \texttt{validate} for a
+quick synthetic sanity check, \texttt{cmip6} for the case study of
+Section~\ref{sec:ex-fig9} with STL detrending (the run without
+detrending uses \texttt{scripts/reproduce\_fig9.py -{}-no-detrend}),
+and \texttt{maps} for gridded observational data of the US National
+Oceanic and Atmospheric Administration (NOAA) Climate Prediction
+Center (CPC). The CMIP6 pipeline writes a checkpoint after each
+stage, and after each cluster within the in-cluster re-estimation, so an
 interrupted run resumes from the last completed unit of work.
 SLURM scripts and setup are provided
-under \texttt{hpc/}. The plotting modules generate diagnostic figures,
-synthetic-study visualisations, and the cluster maps of the CPC and
-CMIP6 workflows.
+under \texttt{hpc/}.
 
 \paragraph{Computational cost}
 The cost is dominated by the local estimation, the in-cluster
 re-estimation, and the two dissimilarity matrices, whose $n(n-1)/2$
-entries grow quadratically with the number of cells~$n$.
-\texttt{weatherisk} vectorises the simulation covariance and the
-ellipse overlaps with NumPy, computes the madogram distances with
-SciPy's compiled distance routines, and distributes per-cell and
-per-cluster optimisations over worker processes.
+entries grow quadratically with the number of cells~$n$. The
+simulation covariance and the ellipse overlaps are vectorised with
+NumPy, and the per-cell and per-cluster optimisations run in
+parallel worker processes.
 
 \rev{\subsection{Validation}
 \label{sec:validation}}
@@ -490,11 +487,10 @@ exceed its value at R's optimum by at most~0.03. Equal parameters
 are not a meaningful target, because each cell has 20~annual maxima
 and, when $a$ is at its lower bound, the likelihood is nearly flat
 in $b$ and $\gamma$. The Python value is lower than R's at 12~cells
-(by up to $0.27$) and equal within $10^{-6}$ at the other 13. We
-chose the number of starts on these data and on five cells of the
-simulated field: with 50 starts, the criterion held at all 30~cells
-for each of 21~seeds of the start design, whereas six of the seeds
-0--9 failed it with 20 starts and four with 40.
+(by up to $0.27$) and equal within $10^{-6}$ at the other 13. With
+50 starts, the criterion held on these data and on five cells of the
+simulated field for each of 21~seeds of the start design; with 20 or
+40 starts, it failed for six and four of the seeds 0--9.
 
 \textbf{Level~3: structure and regression (103 tests).}
 These tests do not compare with R. They cover checkpointing and
@@ -529,7 +525,7 @@ STL detrending & absolute $\leq 10^{-13}\max|x|$ & \mbox{$2.3{\times}10^{-14}\ma
 Annual maxima & relative $\leq 10^{-12}$ & $2.0\times10^{-14}$ \\
 GEV fit, Fr\'{e}chet & absolute $\leq 10^{-3}$; relative $\leq 2\times10^{-3}$ & $4.2\times10^{-4}$; $9.6\times10^{-4}$ \\
 Local estimation & $\mathrm{NLL}_{\text{Python}} \leq \mathrm{NLL}_{\text{R}} + 0.03$ & $+7.3\times10^{-7}$ \\
-Ellipse overlap & relative $\leq 5\times10^{-15}$ & $1.9\times10^{-15}$ \\
+Ellipse overlap & absolute $10^{-14}$ plus relative $5\times10^{-15}$ & $1.9\times10^{-15}$ \\
 LEC clustering & threshold within $10^{-14}$, $k$ equal & $k$ equal \\
 EDC madogram & absolute $\leq 10^{-10}$ & $5\times10^{-16}$ \\
 EDC clustering & threshold within $10^{-12}$, $k$ equal & $k$ equal \\
@@ -555,7 +551,9 @@ linearly from 0 on the left to 5 on the right, while $a = 2$ and
 $\gamma = 0$ are constant, creating vertical ``stripe'' regions. The call
 \texttt{run\_nonstationary\_pipeline("paper\_stripes", seed=42,
 n\_workers=32)} took 8.4~hours of wall
-time; the repository README gives further code examples.
+time. The preset
+sets $\varepsilon$ and the smoothing radius to 4 grid points, and the
+in-cluster re-estimation uses pairs up to 4 grid points apart.
 
 Figure~\ref{fig:stripes} shows the result. The in-cluster estimates
 of~$b$ of the seven EDC clusters range from 0.31 to 3.73 and follow
@@ -566,8 +564,8 @@ right; the fifth is a cluster of 28~cells in the upper-right corner
 ($b = 5.07$). Of the 51~grid columns, 24 lie entirely within one LEC
 cluster. If each cell is assigned the estimate of its cluster, the
 mean absolute error with respect to the true~$b$ over the 2601~cells
-is 0.37 for LEC and 0.86 for EDC. Contzen et al.~\cite{contzen2025}
-report the same contrast for this design (their Figure~3). They obtain six clusters with both
+is 0.37 for LEC and 0.86 for EDC. Contzen et al.\ report the same
+contrast for this design (Fig.~3 in~\cite{contzen2025}). They obtain six clusters with both
 methods. The counts need not agree, because the Python package draws
 the 250 replicates with its own random number generator.
 
@@ -579,15 +577,14 @@ the 250 replicates with its own random number generator.
   (a)~EDC clusters coloured by their estimated axis difference~$b$;
   (b)~LEC clusters coloured by their estimated~$b$;
   (c)~true field $b = (x+5)/2$, rising from 0 to~5.
-  The LEC boundaries are mostly vertical, as in the true field,
-  apart from a 28-cell cluster in the upper-right corner; several
-  EDC boundaries run horizontally.}
+  The LEC boundaries are mostly vertical, as in the true field;
+  several EDC boundaries run horizontally.}
 \label{fig:stripes}
 \end{figure}
 
 \FloatBarrier
 
-\rev{\subsection{Example~2: \revb{Revisiting the Figure~9 case study} --- AWI-ESM-1-1-LR
+\rev{\subsection{Example~2: \revb{Revisiting the published case study} --- AWI-ESM-1-1-LR
   global precipitation}
 \label{sec:ex-fig9}}
 
@@ -596,9 +593,10 @@ monthly precipitation from the AWI-ESM-1-1-LR
 historical simulation (T63 grid, $192 \times 96$ cells, r1i1p1f1,
 years 1850--2005) and the parameter settings of
 Table~\ref{tab:fig9-params}.} The pipeline was run twice on one
-64-core node of the AWI \emph{albedo} HPC cluster with the SLURM
-script \texttt{hpc/run\_fig9\_pyonly.slurm}, once with STL
-detrending and once without (Listing~\ref{lst:fig9}).
+64-core node of the \revt{Alfred Wegener Institute (AWI)}
+\emph{albedo} HPC cluster, as two jobs of the SLURM script
+\texttt{hpc/run\_fig9\_pyonly.slurm}, each running one command of
+Listing~\ref{lst:fig9}.
 
 \begin{table}[ht]
 \centering
@@ -613,12 +611,12 @@ Clustering quantile threshold & 30\textsuperscript{th} percentile \\
 Period & 1850--2005 (156~years) \\
 \bottomrule
 \end{tabular}
-\caption{Parameter settings used for the Figure~9 \revb{case-study analysis},
+\caption{Parameter settings used for the \revb{case study of Example~2},
   following Section~5 of Contzen et al.~\cite{contzen2025}.}
 \label{tab:fig9-params}
 \end{table}
 
-\begin{lstlisting}[caption={\revb{Running the Figure~9 case study on HPC}.},
+\begin{lstlisting}[caption={\revb{Running the case study of Example~2 on HPC}.},
   label=lst:fig9, numbers=none]
 $ python scripts/reproduce_fig9.py \
     --data-dir /path/to/AWI-ESM-1-1-LR/pr/ \
@@ -629,19 +627,15 @@ $ python scripts/reproduce_fig9.py \
     --no-detrend
 \end{lstlisting}
 
-Local estimation took 11.9\,h with STL detrending and 11.8\,h
-without, both dissimilarity matrices together about 5\,min, and the
+With and without STL detrending, local estimation took 11.9\,h and
+11.8\,h, both dissimilarity matrices together about 5\,min, and the
 in-cluster re-estimation 24\,h and 14\,h; stages 3--6, resumed from
-the checkpoint written after stage~1, took 36.0\,h and 26.0\,h of
-wall time. The re-estimation assigns one worker to each cluster, so
-the last clusters to finish (3{,}247 cells, the fourth-largest
-cluster, in the STL run; 6{,}230 cells, the largest, in the run
-without detrending) were each processed by a single worker while
-most of the other cores were idle, and the CPU utilisation averaged
-over the whole job was 35\% and 47\% of the 64 allocated cores. The SLURM maximum of the resident
-memory summed over all processes, which counts shared pages more
-than once, was 95\,GiB and 85\,GiB; the largest single process
-peaked at 36\,GiB and 38\,GiB.
+the checkpoint after stage~1, took 36.0\,h and 26.0\,h of wall time.
+The re-estimation assigns one worker to each cluster, so the last
+clusters to finish ran on single workers while most cores were idle,
+and the CPU utilisation averaged 35\% and 47\% of the 64 cores. The
+largest single process peaked at 36\,GiB and 38\,GiB of resident
+memory.
 
 \begin{table}[ht]
 \centering
@@ -655,7 +649,7 @@ Contzen et al.~\cite{contzen2025} & 104 & 24 \\
 \texttt{weatherisk}, STL detrending & 142 & 14 \\
 \bottomrule
 \end{tabular}
-\caption{Cluster counts for the Figure~9 case study (30\% quantile
+\caption{Cluster counts for the case study of Example~2 (30\% quantile
   threshold in all cases).}
 \label{tab:fig9-counts}
 \end{table}
@@ -667,42 +661,37 @@ preprocessing produced the published counts, and we report both
 runs.
 
 The EDC chain involves no numerical optimisation, since the
-madogram depends only on the ranks of the annual maxima. For six STL variants (the
-setting above; the same with the seasonal component also removed;
-non-robust fitting; a seasonal window \texttt{s.window} of 7 or of
-13; and the period extended to 2014), $k_{\text{edc}}$ lay between
-138 and 146 with SciPy's merge order and between 137 and 147 with
-that of R's \texttt{hclust}. Without detrending, it was 104 with
-SciPy and 106 with R's merge order. Differences of this size come
-from the order in which equal dissimilarities are merged. For the STL
-input, the R functions of Contzen et al.\ give 140 instead of 142,
-and permuting the order of tied entries gives values from 139 to
-142.
+madogram depends only on the ranks of the annual maxima. For six
+STL variants (seasonal component also removed, non-robust fitting,
+\texttt{s.window} of 7 or 13, period extended to 2014, and the
+setting above), $k_{\text{edc}}$ lay between 137 and 147 with the
+merge orders of SciPy and of R's \texttt{hclust}; without
+detrending, it was 104 and 106. Such differences come from the order
+in which equal dissimilarities are merged. For the STL input, the R
+functions of Contzen et al.\ give 140, and permuting tied entries
+gives 139 to 142.
 
-The LEC count depends, in addition, on the local estimates and hence
-on the optimiser. Where the likelihood surface is flat, optima of
-equal likelihood can have different parameters
-(Section~\ref{sec:validation}), so an exact match of
-$k_{\text{lec}}$ with a different optimiser is not expected, and we
+The LEC count also depends on the local estimates and hence on the
+optimiser. Where the likelihood is flat, optima of equal likelihood
+can have different parameters (Section~\ref{sec:validation}), so we
 do not interpret the difference between 23 and 24. Both runs used
 commit \texttt{7561a6e}; recomputing their EDC labels with the only
-later change, the R ranking of tied annual maxima in the madogram,
+later change to the computation, R's rank rule for tied annual maxima
+in the madogram,
 gives identical labels.
 
 \FloatBarrier
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=\textwidth]{figures/fig9_pyonly_comparison.png}
-\caption{The Figure~9 case study of Contzen
-  et al.~\cite{contzen2025} recomputed with \texttt{weatherisk}: EDC clusters
+\caption{The case study of Contzen
+  et al.~\cite{contzen2025} (their Figure~9) recomputed with \texttt{weatherisk}: EDC clusters
   (left) and LEC clusters (right) of annual maxima of monthly
   AWI-ESM-1-1-LR historical precipitation (T63 grid, 1850--2005;
   $\nu = 5$, $\alpha = 1$, $\varepsilon = 5$, 30\% quantile
   threshold), computed without detrending (top row) and with STL
   detrending (bottom row). Colours only distinguish clusters within a
-  panel and are reused when a panel has more clusters than colours.
-  Contzen et al.\ report $k_{\text{edc}} = 104$ and
-  $k_{\text{lec}} = 24$.}
+  panel and are reused when a panel has more clusters than colours.}
 \label{fig:fig9}
 \end{figure}
 
@@ -757,8 +746,8 @@ lightweight synthetic check without local estimation.
 implements the complete pipeline for spatial clustering of climate
 extremes via max-stable processes.} \revg{Its tests compare it with
 stored outputs of R function by function and, on synthetic data,
-stage by stage, without calling R. The full Figure~9
-\revb{case study} on the AWI-ESM-1-1-LR T63 grid ran in 26 to 36~hours
+stage by stage, without calling R. Stages 3--6 of the
+\revb{case study} on the AWI-ESM-1-1-LR T63 grid took 26 to 36~hours
 on 64~cores. Without detrending it reproduces the published EDC count
 of 104 and gives 23 LEC clusters against 24; the dependence of the
 counts on detrending (Section~\ref{sec:ex-fig9}) shows that the
@@ -814,9 +803,8 @@ seed given there.
 %% ============================================================
 \section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}
 %% ============================================================
-% AUTHOR CHECK: state the tools you used and what for; the wording after the first sentence is Elsevier's required text.
 During the preparation of this work the authors used Claude
-(Anthropic) in order to assist with writing and testing code and
+(Anthropic) to assist with writing and testing code and
 with editing the manuscript text. After using this tool, the
 authors reviewed and edited the content as needed and take full
 responsibility for the content of the published article.
@@ -826,14 +814,17 @@ responsibility for the content of the published article.
 %% ============================================================
 The authors thank the Alfred Wegener Institute Helmholtz Centre for
 Polar and Marine Research (AWI) for access to the \emph{albedo}
-computing cluster, on which the Figure~9 case-study pipeline was
-executed. We thank J.~Contzen for the original R implementation of
+computing cluster, on which the case study of Example~2 was run. We thank J.~Contzen for the original R implementation of
 the methods, on which \texttt{weatherisk} is based.
 
 \paragraph*{Funding}
-W.~Kchikach is supported by the MarDATA Helmholtz School for Marine
-Data Science (grant no.\ HIDSS-0005). G.~Lohmann acknowledges
-support from the ERC Synergy Grant ``i2B'' (grant no.\ 101118519).
+This work was supported by the Helmholtz Association [grant number
+HIDSS-0005, MarDATA Helmholtz School for Marine Data Science] and the
+European Research Council [ERC Synergy Grant i2B, grant number
+101118519]. The funders had no role in study design; in the
+collection, analysis and interpretation of data; in the writing of
+the report; or in the decision to submit the article for
+publication.
 
 
 %% ============================================================
@@ -845,49 +836,69 @@ support from the ERC Synergy Grant ``i2B'' (grant no.\ 101118519).
 A.C.~Davison, S.A.~Padoan, M.~Ribatet,
 Statistical modeling of spatial extremes,
 Stat.\ Sci.\ 27\,(2) (2012) 161--186.
+\url{https://doi.org/10.1214/11-STS376}
 
 \bibitem{dehaan2006}
 L.~de~Haan, A.~Ferreira,
 Extreme Value Theory: An Introduction,
 Springer, New York, 2006.
+\url{https://doi.org/10.1007/0-387-34471-3}
 
 \bibitem{padoan2010}
 S.A.~Padoan, M.~Ribatet, S.A.~Sisson,
 Likelihood-based inference for max-stable processes,
 J.\ Am.\ Stat.\ Assoc.\ 105\,(489) (2010) 263--277.
+\url{https://doi.org/10.1198/jasa.2009.tm08577}
 
 \bibitem{contzen2025}
 \rev{J.~Contzen, T.~Dickhaus, G.~Lohmann,
 Regionalization approaches for the spatial analysis of extremal
 dependence,
-Extremes 28 (2025) 713--737.
+Extremes 28\,(4) (2025) 713--737.
 \url{https://doi.org/10.1007/s10687-025-00519-2}}
 
 \bibitem{pyextremes}
-G.~Bocharov,
-pyextremes: Extreme value analysis in Python,
-\url{https://github.com/georgebv/pyextremes}, 2023.
+[software] G.~Bocharov,
+pyextremes: Extreme value analysis in Python, version 2.6.1,
+\url{https://github.com/georgebv/pyextremes} [accessed 14
+November 2026].
+
+\bibitem{scikitextremes}
+[software] K.~Correoso,
+scikit-extremes: univariate extreme value analysis in Python,
+\url{https://github.com/kikocorreoso/scikit-extremes}
+[accessed 14 November 2026].
 
 \bibitem{spatialextremes}
-M.~Ribatet,
+[software] M.~Ribatet,
 SpatialExtremes: Modelling Spatial Extremes,
-R package, \url{https://CRAN.R-project.org/package=SpatialExtremes}, 2023.
+R package version 2.1-0, 2022, archived on CRAN,
+\url{https://doi.org/10.32614/CRAN.package.SpatialExtremes}.
+
+% RELEASE BLOCKER: replace XXXXXXX with the Zenodo DOI of v0.2.0.
+\bibitem{weatherisk}
+[software] W.~Kchikach, T.~Dickhaus, G.~Lohmann,
+weatherisk: A Python Package for Spatial Clustering of Climate
+Extremes via Max-Stable Processes, version 0.2.0, Zenodo (2026),
+\url{https://doi.org/10.5281/zenodo.XXXXXXX}.
 
 \bibitem{cleveland1990}
 \rev{R.B.~Cleveland, W.S.~Cleveland, J.E.~McRae, I.~Terpenning,
 STL: A seasonal-trend decomposition procedure based on loess,
-J.\ Official Stat.\ 6\,(1) (1990) 3--73.}
+J.\ Off.\ Stat.\ 6\,(1) (1990) 3--73.}
 
 \bibitem{schlather2002}
 M.~Schlather,
 Models for stationary max-stable random fields,
 Extremes 5\,(1) (2002) 33--44.
+\url{https://doi.org/10.1023/A:1020977924878}
 
 \bibitem{opitz2013}
 T.~Opitz,
 Extremal $t$ processes: Elliptical domain of attraction and a
 spectral representation,
-J.\ Multivariate Anal.\ 122 (2013) 409--413.
+J.\ Multivar.\ Anal.\ 122 (2013) 409--413.
+\url{https://doi.org/10.1016/j.jmva.2013.08.008}
 
 \bibitem{cooley2006}
 D.~Cooley, P.~Naveau, P.~Poncet,
@@ -895,16 +906,19 @@ Variograms for spatial max-stable random fields,
 in: P.~Bertail, P.~Soulier, P.~Doukhan (Eds.),
 Dependence in Probability and Statistics,
 Springer, 2006, pp.~373--390.
+\url{https://doi.org/10.1007/0-387-36062-X_17}
 
 \bibitem{saunders2021}
 K.~Saunders, A.G.~Stephenson, D.J.~Karoly,
 A regionalisation approach for rainfall based on extremal dependence,
 Extremes 24\,(2) (2021) 215--240.
+\url{https://doi.org/10.1007/s10687-020-00395-y}
 
 \bibitem{bauer2021}
 P.~Bauer, B.~Stevens, W.~Hazeleger,
 A digital twin of Earth for the green transition,
 Nat.\ Clim.\ Change 11\,(2) (2021) 80--83.
+\url{https://doi.org/10.1038/s41558-021-00986-y}
 
 \bibitem{danek2020}
 [dataset] C.~Danek, X.~Shi, C.~Stepanek, H.~Yang, D.~Barbi,

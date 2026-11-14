@@ -3,7 +3,8 @@
 This list collects every point from the four audits of 2026-11-12 that concerns the paper, the highlights or the cover letter. Repository and release items are listed only where the paper depends on them; the rest are in `submission_todo_v24.md`.
 
 - Line numbers refer to `softwarex_paper_v24.tex` at commit 53b6db3.
-- Nothing has been changed yet.
+- Applied to `softwarex_paper_v24.tex`, `highlights.txt` and `cover_letter.tex` on 2026-11-14. Not applied: 35 (Figure 2 fonts), 45 (merge decision), 47 (TW, both statements true), 53a, 57 and 58 (need Widad), 67 to 69 (upload steps). Item 39 reads "as two jobs of the SLURM script ..., each running one command of Listing 1", because the script runs one command per job. Item 10 uses Thorsten's master wording (option A). The cuts for item 59 are in the Example 2 cost and STL-variant passages, the plotting and cost paragraphs of Section 2.2, the start-count sentence of Level 2, the Figure 2 and Figure 3 captions, and one sentence of stage 1a that repeated Thorsten's sentence. The count is 3591 (abstract, text, captions), 3973 with end statements and tables.
+- The upload copy is `softwarex_paper_v24_clean.tex`, made by `make_clean_v24.py`. Its PDF text equals the tracked PDF on all pages. Figure 1 for upload is `Figure_1.pdf` (from `Figure_1.tex`).
 
 **Markers**
 - **[R]** could lead to a desk return or rejection.

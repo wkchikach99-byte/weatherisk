@@ -1,0 +1,7 @@
+Highlights
+
+- Open-source Python package for clustering grid cells by extremal dependence
+- Full pipeline from monthly climate-model fields to Fréchet margins and clusters
+- Two clustering schemes: Local Estimates and Extremal Dependence Clustering
+- Test suite compares functions with stored R outputs; R is not needed to run it
+- Recovers the published 104 clusters without detrending; STL detrending gives 142
