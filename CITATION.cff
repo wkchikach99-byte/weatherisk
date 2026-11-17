@@ -9,13 +9,13 @@ authors:
   - family-names: Kchikach
     given-names: Widad
     email: widad.kchikach@awi.de
-    affiliation: "Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research, Bremerhaven, Germany"
+    affiliation: "Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research, Bremerhaven, Germany; Institute for Statistics, University of Bremen, Bremen, Germany"
   - family-names: Dickhaus
     given-names: Thorsten
-    affiliation: "University of Bremen, Bremen, Germany"
+    affiliation: "Institute for Statistics, University of Bremen, Bremen, Germany"
   - family-names: Lohmann
     given-names: Gerrit
-    affiliation: "Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research, Bremerhaven, Germany"
+    affiliation: "Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research, Bremerhaven, Germany; Faculty of Physics and Electrical Engineering, University of Bremen, Bremen, Germany"
 
 abstract: >
   weatherisk is an open-source Python package for identifying regions of
