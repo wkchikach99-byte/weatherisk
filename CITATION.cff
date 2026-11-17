@@ -43,8 +43,8 @@ repository-code: "https://github.com/wkchikach99-byte/weatherisk"
 
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.20108563"
-    description: "Zenodo archived release v0.1.1"
+    value: "10.5281/zenodo.24326579"
+    description: "Zenodo archived release v0.2.0"
 
 references:
   - type: article

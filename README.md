@@ -1,7 +1,7 @@
 # weatherisk
 
 [![Tests](https://github.com/wkchikach99-byte/weatherisk/actions/workflows/tests.yml/badge.svg)](https://github.com/wkchikach99-byte/weatherisk/actions/workflows/tests.yml)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20108563.svg)](https://doi.org/10.5281/zenodo.20108563)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24326579.svg)](https://doi.org/10.5281/zenodo.24326579)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 

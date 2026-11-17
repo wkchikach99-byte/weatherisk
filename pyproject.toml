@@ -40,7 +40,7 @@ dependencies = [
 Homepage = "https://github.com/wkchikach99-byte/weatherisk"
 Repository = "https://github.com/wkchikach99-byte/weatherisk"
 "Bug Tracker" = "https://github.com/wkchikach99-byte/weatherisk/issues"
-"Zenodo DOI" = "https://doi.org/10.5281/zenodo.20108563"
+"Zenodo DOI" = "https://doi.org/10.5281/zenodo.24326579"
 
 [project.optional-dependencies]
 dev = [
