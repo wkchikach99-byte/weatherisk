@@ -113,6 +113,8 @@ A change of 1 ULP in the input has the same effect: with the default pandas
 parser the same code gave k = 12 with 21 disagreeing pairs on the M4 and
 k = 11 on the Linux CI runner. Earlier versions of this report gave those
 default-parser figures (k = 12, 21 pairs, 3.23e-3).
+`python tests/parity/report_edc_tie_orders.py` prints these figures. Continuous
+integration runs it on Linux and macOS.
 
 ## Mini CMIP6 pipeline (`tests/test_cmip6_rparity.py`)
 

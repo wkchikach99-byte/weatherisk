@@ -33,3 +33,7 @@ jobs:
 
       - name: Run tests (excluding slow)
         run: pytest -m "not slow" --tb=short
+
+      - name: Report EDC cluster counts under tie reordering
+        if: always()
+        run: python tests/parity/report_edc_tie_orders.py
