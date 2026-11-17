@@ -6,7 +6,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.2.0] — 2026-11-17
 
 ### Removed
 - R is no longer called at run time. The package does not call `Rscript` for local optimisation, hierarchical clustering, GEV fitting, or STL detrending.
