@@ -109,6 +109,10 @@ where R has 12, at R's k = 12 the two partitions disagree on 417 of 4950 cell
 pairs, and the sorted merge heights differ by up to 6.56e-3. Over 2000 random
 cell orders SciPy gives 9 to 14 clusters (12 in 1032 orders), 0 to 764 pairs
 disagree with R, and the sorted heights differ from R's by 2.8e-17 to 1.45e-2.
+GitHub's runners (run 44194178528; SciPy 1.15.3 under Python 3.10 and 1.17.1
+under 3.11) give the same stored-order figures on Linux x86-64 and macOS arm64.
+Over the 2000 orders Linux gives 12 clusters in 1036 orders where macOS gives
+1032; the range 9 to 14, the pair range and the height range are the same.
 A change of 1 ULP in the input has the same effect: with the default pandas
 parser the same code gave k = 12 with 21 disagreeing pairs on the M4 and
 k = 11 on the Linux CI runner. Earlier versions of this report gave those

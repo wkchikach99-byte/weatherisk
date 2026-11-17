@@ -474,11 +474,11 @@ $1.4\times10^{-14}$. The STL module is compared with R's
 tolerance of $10^{-12}$, with looser tolerances for one configuration
 whose series consist mostly of exact zeros. The EDC dendrogram is the one result that is not
 held to rounding error: many F-madogram distances on the
-$10{\times}10$ field are tied, \texttt{hclust} and SciPy merge tied
-pairs in a different order, and later merge heights differ by up to
-$0.0032$. The threshold and the number of clusters equal R's
-exactly, and 99.6\,\% of all pairs of cells are assigned
-consistently (21 of 4{,}950 pairs differ).
+$10{\times}10$ field are tied, and the order in which tied pairs
+are merged decides the tree. The threshold equals R's exactly, and
+both trees are valid average-linkage trees on the same distances.
+R gives 12~clusters and SciPy~13; reordering the cells, which
+changes only the order of ties, gives 9 to~14, most often~12.
 
 \textbf{Level~2: the climate pipeline on synthetic data (16 tests).}
 The synthetic data of the R workflow are run through the Python

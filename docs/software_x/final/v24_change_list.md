@@ -170,3 +170,12 @@ This list collects every point from the four audits of 2026-11-12 that concerns 
 - 13 green sentences that were reworded in v23 (listed in `judgment_calls_for_review.md` §K). Ask Gerrit whether to restore them. None of them is wrong.
 - C4: no change recommended. Restoring Thorsten's full clause would overstate what the validation covers.
 - Not a paper change, for your note to Thorsten: the run that matches 104 fits stationary GEVs to 156 years without detrending. That is the situation behind his C9 and C14. The paper makes no validity claim for it.
+
+## Change after the CI correction (2026-11-17)
+
+Level 1 paragraph, EDC dendrogram passage. The old figures held only when the reference files were read with the default pandas parser on the Mac, which is off in the last digit on some numbers. With R's exact inputs they do not hold.
+
+- Before: "many F-madogram distances on the $10{\times}10$ field are tied, \texttt{hclust} and SciPy merge tied pairs in a different order, and later merge heights differ by up to $0.0032$. The threshold and the number of clusters equal R's exactly, and 99.6\,\% of all pairs of cells are assigned consistently (21 of 4{,}950 pairs differ)."
+- Now: "many F-madogram distances on the $10{\times}10$ field are tied, and the order in which tied pairs are merged decides the tree. The threshold equals R's exactly, and both trees are valid average-linkage trees on the same distances. R gives 12~clusters and SciPy~13; reordering the cells, which changes only the order of ties, gives 9 to~14, most often~12."
+- Evidence: `python tests/parity/report_edc_tie_orders.py`, run by CI on Linux and macOS (run 44194178528). Stored cell order: 13 clusters on both systems. 2000 random cell orders: 9 to 14 clusters on both systems, 12 in 1032 orders on macOS and in 1036 on Linux.
+- No other number in the paper changes. Table 2 and the Level 1 value $1.4\times10^{-14}$ were re-measured with exact reading and are identical.
