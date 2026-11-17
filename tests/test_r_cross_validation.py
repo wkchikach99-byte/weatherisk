@@ -550,23 +550,23 @@ class TestClustering:
                                    err_msg="LEC merge heights mismatch")
 
     def test_saunders_cluster_count(self):
-        """EDC/Saunders clustering produces similar k to R.
+        """R's EDC/Saunders k is reachable by tie order alone.
 
-        UPGMA tie-breaking differs between R's hclust and scipy's linkage
-        when the madogram has many tied distances (10 simulations).
-        We allow ±1 cluster difference.
+        The madogram of 10 simulations has many tied distances, and the
+        order in which average linkage merges them decides k.  R's k must
+        lie within the counts SciPy gives when the cells are reordered.
         """
-        from weatherisk.clustering import (
-            clustering, cluster_number_threshold_method
-        )
+        from tests.parity.conftest import edc_k_under_cell_orders
         ref_params = pd.read_csv(REF / "saunders_clustering_params.csv")
         k_r = int(ref_params["k_saunders"].iloc[0])
         q30_r = float(ref_params["q30_threshold"].iloc[0])
 
         ref_dist = pd.read_csv(REF / "madogram_matrix.csv").values
-        hc = clustering(ref_dist, method="average")
-        k_py = cluster_number_threshold_method(hc, q30_r)
-        assert abs(k_py - k_r) <= 1, f"Saunders k: Python={k_py}, R={k_r} (>1 apart)"
+        ks = edc_k_under_cell_orders(ref_dist, q30_r)
+        assert ks.min() <= k_r <= ks.max(), (
+            f"Saunders k: R={k_r} outside the tie-order spread "
+            f"{ks.min()}..{ks.max()} (stored order: {ks[0]})"
+        )
 
     def test_saunders_merge_heights(self):
         """EDC merge heights approximately match R's hclust.
@@ -744,10 +744,8 @@ class TestPipelineIntegration:
 
     def test_madogram_from_simulation_to_clusters(self):
         """Full EDC pipeline: simulation → madogram → clustering → partition."""
-        from weatherisk.clustering import (
-            c_extrcoeff_matrix, clustering, cluster_number_threshold_method,
-        )
-        from scipy.cluster.hierarchy import fcluster
+        from tests.parity.conftest import edc_k_under_cell_orders
+        from weatherisk.clustering import c_extrcoeff_matrix
 
         # Load R simulation and reshape
         sim_ref = pd.read_csv(REF / "simulation_nonstat_seed42.csv")
@@ -780,9 +778,12 @@ class TestPipelineIntegration:
         k_r = int(ref_params["k_saunders"].iloc[0])
 
         # Use Python's madogram directly for clustering
-        hc = clustering(py_mado, method="average")
         q30 = np.quantile(py_mado[np.triu_indices(n, k=1)], 0.30)
-        k_py = cluster_number_threshold_method(hc, q30)
 
-        # UPGMA tie-breaking can differ → allow ±1 cluster
-        assert abs(k_py - k_r) <= 1, f"k mismatch: Python={k_py}, R={k_r} (>1 apart)"
+        # The order of tied merges decides k, so R's k must be reachable by
+        # reordering the cells.
+        ks = edc_k_under_cell_orders(py_mado, q30)
+        assert ks.min() <= k_r <= ks.max(), (
+            f"k mismatch: R={k_r} outside the tie-order spread "
+            f"{ks.min()}..{ks.max()} (stored order: {ks[0]})"
+        )

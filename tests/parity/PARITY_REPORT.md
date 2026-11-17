@@ -20,6 +20,13 @@ mini CMIP6 fixture (`tests/reference_data/cmip6_mini/`) was written with
 inputs are stored as raw binary, because R's `read.csv` and pandas'
 `read_csv` disagree by 1 ULP on some doubles.
 
+Since 2026-11-17 every test reads CSVs with pandas' round-trip parser
+(`tests/conftest.py`). The default parser is off by 1 ULP on some numbers,
+and on which numbers depends on the platform: on an Apple M4 it misreads
+numbers in 32 of the 47 main fixture files, and on the Linux x86-64 CI runner
+it read R's LEC threshold 1 ULP lower than the M4 did. With the round-trip
+parser the inputs are the doubles R wrote.
+
 ## Acceptance criteria
 
 The criteria are those of `docs/remove_r_runtime_plan.md` (U4).
@@ -29,7 +36,7 @@ The criteria are those of `docs/remove_r_runtime_plan.md` (U4).
 | Strict | Deterministic functions | `max abs(Python - R) < STRICT_ATOL = 1e-14`. Where the fixture has limited CSV precision the test states the allowance (`CSV_ATOL = 5e-14` for entries up to 100; `rtol = 5e-15` for the 15-digit mini fixture). |
 | Likelihood | Optimizer outputs | At every cell, `NLL_py <= NLL_R + NLL_TOL`, `NLL_TOL = 0.03`. Both negative pairwise log-likelihoods are evaluated by the same deterministic function on the same data. Parameters are not compared. |
 | Clustering on R's input | LEC | Run on R's own smoothed estimates, LEC gives R's threshold to `STRICT_ATOL` and R's k exactly. |
-| Tie-aware | Saunders / EDC | Python may differ from R only through the order in which tied average-linkage distances are merged. |
+| Tie-aware | Saunders / EDC | Python may differ from R only through the order in which tied average-linkage distances are merged. Where ties decide the cluster count, R's k must lie within the counts SciPy gives under 200 seeded random cell orders. |
 
 The likelihood tests use the package default start budget
 (`CMIP6Config().mle_ensemble`), not R's `locest_ensemble`.
@@ -59,7 +66,7 @@ the tolerance but does not print the value.
 | `test_parity_grid_number.py` | `grid_number` | `grid.Grid.grid_number` | – | integer equality |
 | `test_parity_number_grid.py` | `number_grid` | `grid.Grid.number_grid` | – | integer equality |
 | `test_parity_koord_num.py` | `koord_num` | `grid.Grid.koord_num` | – | 1e-14 |
-| `test_parity_cluster_number_threshold_method.py` | `cluster_number_threshold_method` | `clustering.cluster_number_threshold_method` | – | integer equality |
+| `test_parity_cluster_number_threshold_method.py` | `cluster_number_threshold_method` | `clustering.cluster_number_threshold_method` | – | LEC: integer equality. Saunders: R's k within the tie-order spread |
 
 ## Optimizer outputs (likelihood)
 
@@ -86,16 +93,26 @@ All tests are in `test_parity_clustering.py`.
 | `TestParityClusteringLEC::test_lec_on_r_smoothed_estimates_matches_r` | On R's smoothed estimates, q10 to 1e-14, k exact, partition exact | Passes. k = 21, threshold diff 7e-15, 0 of 4950 cell pairs disagree. |
 | `TestParityClusteringSaunders::test_saunders_scipy_tree_is_valid_upgma_on_r_madogram` | Each SciPy merge joins a pair at the current minimum average-linkage distance, at that height, to 1e-14 | Passes. Height error at most 5.6e-17, gap at most 1.4e-17. |
 | `TestParityClusteringSaunders::test_saunders_r_tree_is_valid_upgma_on_same_madogram` | R's `hclust` merge list, replayed on the same madogram, satisfies the same condition | Passes. |
-| `TestParityClusteringSaunders::test_saunders_threshold_and_k_match_r` | q30 to 1e-14, k exact | Passes. k = 12. |
+| `TestParityClusteringSaunders::test_saunders_threshold_matches_r_and_k_within_tie_order_spread` | q30 to 1e-14; R's k within the counts SciPy gives under 200 random cell orders | Passes. Threshold diff 0. SciPy gives k = 13 in the stored order and 9 to 14 over the 200 orders; R has k = 12. |
 | `TestParityClusteringEDCMini::test_edc_mini_threshold_k_and_partition_match_r` | Mini fixture: q30 to rtol 5e-15, k exact, partition exact | Passes. k = 7, partition identical. |
 
 **Saunders ties.** The madogram of 10 simulations takes 22 distinct values
 over 4950 pairs, so average linkage meets exact ties. R's `hclust` and SciPy's
-`linkage` break them in different orders. At R's k = 12 the two partitions
-disagree on 21 of 4950 cell pairs, and the sorted merge heights differ by up to
-3.23e-3. Both merge lists are valid greedy UPGMA runs on the same matrix, so
-the trees differ only in which tied pair is merged first. The replay rejects
-complete, single and weighted linkage, so it does discriminate between methods.
+`linkage` break them in different orders. Both merge lists are valid greedy
+UPGMA runs on the same matrix, so the trees differ only in which tied pair is
+merged first. The replay rejects complete, single and weighted linkage, so it
+does discriminate between methods.
+
+The tie order decides the result. Measured on an Apple M4 (SciPy 1.17.1) with
+the inputs read exactly: in the stored cell order SciPy cuts into 13 clusters
+where R has 12, at R's k = 12 the two partitions disagree on 417 of 4950 cell
+pairs, and the sorted merge heights differ by up to 6.56e-3. Over 2000 random
+cell orders SciPy gives 9 to 14 clusters (12 in 1032 orders), 0 to 764 pairs
+disagree with R, and the sorted heights differ from R's by 2.8e-17 to 1.45e-2.
+A change of 1 ULP in the input has the same effect: with the default pandas
+parser the same code gave k = 12 with 21 disagreeing pairs on the M4 and
+k = 11 on the Linux CI runner. Earlier versions of this report gave those
+default-parser figures (k = 12, 21 pairs, 3.23e-3).
 
 ## Mini CMIP6 pipeline (`tests/test_cmip6_rparity.py`)
 

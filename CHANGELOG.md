@@ -23,7 +23,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - GEV fits match R within 0.001 in the parameters and 0.2% in the Fréchet values.
   - The local optimiser is judged by likelihood. At each cell of the mini CMIP6 reference, the summed pairwise negative log-likelihood at the Python optimum may exceed its value at R's optimum by at most 0.03, with the default start budget. Parameter values are not compared, because the start designs and L-BFGS-B implementations differ and the likelihood is nearly flat in `b` and γ where `a` is close to 0.
   - LEC on R's smoothed local estimates reproduces R's threshold to 1e-14 and R's *k* exactly.
-  - EDC on the mini CMIP6 reference reproduces R's threshold to 1e-12 and R's *k* exactly. On the simulated reference, where many madogram distances are tied, merge heights may differ by up to 0.015 and *k* by 1, because SciPy and R merge tied distances in different orders.
+  - EDC on the mini CMIP6 reference reproduces R's threshold to 1e-12 and R's *k* exactly. On the simulated reference, where many madogram distances are tied, the order in which SciPy and R merge tied distances decides the result. Both trees are checked to be valid average-linkage trees on the same distances, merge heights may differ by up to 0.015, and R's *k* must lie within the counts SciPy gives when the cells are reordered.
+  - Tests read the reference CSVs with pandas' round-trip parser, so the inputs are the doubles R wrote on every platform. The default parser is off by one unit in the last place on some numbers, differently on Linux and macOS.
 - README, `CITATION.cff`, and the SoftwareX manuscript describe the package as independent of R at run time.
 
 ---

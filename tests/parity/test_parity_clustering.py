@@ -12,17 +12,23 @@ Criteria:
         Python may differ from R only through tie-breaking.  The madogram of
         10 simulations takes 22 distinct values over 4950 pairs, so
         average linkage meets exact ties, and R's hclust and SciPy's linkage
-        break them differently.  Measured on the main fixture at R's k = 12,
-        the two partitions disagree on 21 of 4950 cell pairs and the sorted
-        merge heights differ by up to 3.23e-3.  Neither "same partition" nor
-        "same heights up to tie order" holds, so the tests assert instead:
+        break them differently.  Measured on the main fixture in the stored
+        cell order, SciPy cuts into 13 clusters where R has 12; at R's k = 12
+        the two partitions disagree on 417 of 4950 cell pairs and the sorted
+        merge heights differ by up to 6.56e-3.  Over 2000 random cell orders
+        SciPy gives 9 to 14 clusters (12 in 1032 of them), and 0 to 764 pairs
+        disagree with R.  Moving the input by one unit in the last place has
+        the same effect, which the default pandas parser did on some
+        platforms.  No count, partition or height is therefore fixed by the
+        data, so the tests assert instead:
           1. SciPy's dendrogram is a valid greedy UPGMA run on R's madogram:
              every merge joins a pair at the current minimum average-linkage
              distance, and its height equals that distance, to STRICT_ATOL.
           2. R's dendrogram, replayed on the same madogram, is also a valid
              greedy UPGMA run.  Together with 1 this shows the two trees
              differ only in which tied pair is merged first.
-          3. The threshold and k match R exactly.
+          3. The threshold matches R, and R's k lies within the counts
+             that SciPy gives under 200 random cell orders.
         On the mini CMIP6 fixture the EDC partition is identical to R's and
         is asserted.
 
@@ -42,7 +48,7 @@ import pandas as pd
 import pytest
 from scipy.cluster.hierarchy import fcluster
 from scipy.spatial.distance import squareform
-from tests.parity.conftest import REF, STRICT_ATOL, skip_if_no_ref
+from tests.parity.conftest import REF, STRICT_ATOL, edc_k_under_cell_orders, skip_if_no_ref
 
 # The main fixture stores 17 significant digits; on values up to 100 one ULP
 # is 1.4e-14, so CSV round-trips can differ from Python by a few ULP.
@@ -163,14 +169,18 @@ class TestParityClusteringSaunders:
             f"step {int(gap.argmax()) + 1} merged a pair {gap.max():.2e} above the minimum"
         )
 
-    def test_saunders_threshold_and_k_match_r(self):
+    def test_saunders_threshold_matches_r_and_k_within_tie_order_spread(self):
         params = pd.read_csv(REF / "saunders_clustering_params.csv")
         k_r = int(params["k_saunders"].iloc[0])
         q30_r = float(params["q30_threshold"].iloc[0])
 
-        thr, k, _ = _threshold_k_labels(squareform(self.D, checks=False), 0.30, k_r)
+        thr = float(np.quantile(squareform(self.D, checks=False), 0.30))
         assert abs(thr - q30_r) < STRICT_ATOL, f"q30 {thr!r} != R {q30_r!r}"
-        assert k == k_r, f"k_saunders {k} != R {k_r}"
+        ks = edc_k_under_cell_orders(self.D, thr)
+        assert ks.min() <= k_r <= ks.max(), (
+            f"R's k_saunders {k_r} outside the tie-order spread "
+            f"{ks.min()}..{ks.max()} (stored order: {ks[0]})"
+        )
 
 
 class TestParityClusteringEDCMini:

@@ -17,7 +17,11 @@ Acceptance criteria (docs/remove_r_runtime_plan.md, U4):
   likelihood is flat in (b, g) when a is at its lower bound, so equal
   likelihood does not imply equal parameters (Appendix B of the plan).
 * Hierarchical clustering may differ from R's ``hclust`` only through the
-  order in which tied average-linkage distances are merged.
+  order in which tied average-linkage distances are merged.  Where ties
+  decide the cluster count, R's count must lie within the counts that
+  reordering the cells produces (``edc_k_under_cell_orders``).
+* Reference CSVs are read with the round-trip parser (``tests/conftest.py``),
+  so the inputs are the doubles R wrote on every platform.
 
 Each test file covers one R function and documents the criterion it asserts.
 """
@@ -45,6 +49,24 @@ def skip_if_no_ref():
         pytest.skip(
             "R reference data not generated — run: Rscript tests/generate_r_reference.R"
         )
+
+
+def edc_k_under_cell_orders(dist, threshold, n_orders=200, seed=0):
+    """Cluster counts of SciPy average linkage on ``dist`` under cell reorderings.
+
+    Reordering the cells leaves every distance unchanged and changes only the
+    order in which tied distances are met.  Entry 0 is the stored order; the
+    other ``n_orders`` entries use seeded random orders.
+    """
+    from weatherisk.clustering import clustering, cluster_number_threshold_method
+
+    rng = np.random.default_rng(seed)
+    n = dist.shape[0]
+    ks = [cluster_number_threshold_method(clustering(dist), threshold)]
+    for _ in range(n_orders):
+        p = rng.permutation(n)
+        ks.append(cluster_number_threshold_method(clustering(dist[np.ix_(p, p)]), threshold))
+    return np.array(ks)
 
 
 def package_default_ensemble() -> int:
