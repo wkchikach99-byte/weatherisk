@@ -165,6 +165,7 @@ This list collects every point from the four audits of 2026-11-12 that concerns 
 - Item 57. Done on 2026-11-17. Contzen gave consent, and the acknowledgement now thanks him for permission to include the R code in the repository.
 - Item 55. Settled on 2026-11-17. Dickhaus has no funding to add. The only funding is on Lohmann's side, as the paragraph already states.
 - Cover letter. Widad confirmed on 2026-11-17 that all authors have read the final version.
+- Addresses. Changed on 2026-11-17. Kchikach and Dickhaus are now at the Institute for Statistics, Faculty of Mathematics and Computer Science (Bibliothekstraße 5). Lohmann is at the Faculty of Physics and Electrical Engineering (Otto-Hahn-Allee 1). Both street addresses are taken from the University of Bremen pages.
 - Items 1, 53a, 54 and 55: the facts.
 - 13 green sentences that were reworded in v23 (listed in `judgment_calls_for_review.md` §K). Ask Gerrit whether to restore them. None of them is wrong.
 - C4: no change recommended. Restoring Thorsten's full clause would overstate what the validation covers.
